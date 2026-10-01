@@ -63,11 +63,19 @@
       background: #4bb34b;
       color: #fff;
       border: none;
-      padding: 6px 14px;
+      padding: 7px 15px;
       border-radius: 8px;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-free:hover {
+      background: #3e9e3e;
+    }
+    .btn-free:disabled {
+      background: #a5d6a7;
+      cursor: not-allowed;
     }
     .loading {
       text-align: center;
@@ -79,35 +87,43 @@
 <body>
   <div class="container">
     <h2>🎭 Индивидуальное мастерство</h2>
-    <div id="content" class="loading">⏳ Загружаем актуальное расписание...</div>
+    <div id="content" class="loading">⏳ Загружаем расписание...</div>
   </div>
 
   <script>
-    // 1. Инициализация ВК:
+    // 1. Инициализируем ВК и автоматически берем имя пользователя:
     vkBridge.send('VKWebAppInit');
 
-    // 2. Адрес вашей Google Таблицы:
+    let currentUser = { name: "Ученик", id: "" };
+    vkBridge.send('VKWebAppGetUserInfo')
+      .then(user => {
+        if (user && user.first_name) {
+          currentUser.name = user.first_name + " " + (user.last_name ? user.last_name[0] + "." : "");
+          currentUser.id = user.id;
+        }
+      })
+      .catch(e => console.log("Не удалось получить профиль", e));
+
     const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    // 3. Запрос данных из таблицы:
-    fetch(API_URL)
-      .then(res => res.json())
-      .then(data => {
-        renderSchedule(data);
-      })
-      .catch(err => {
-        document.getElementById('content').innerHTML = '<p style="color:red;text-align:center;">Не удалось загрузить данные из таблицы</p>';
-        console.error(err);
-      });
+    // 2. Загрузка данных:
+    function loadSchedule() {
+      fetch(API_URL)
+        .then(res => res.json())
+        .then(data => renderSchedule(data))
+        .catch(err => {
+          document.getElementById('content').innerHTML = '<p style="color:red;text-align:center;">Ошибка загрузки расписания</p>';
+          console.error(err);
+        });
+    }
 
-    // 4. Отрисовка карточек с днями:
+    // 3. Отрисовка:
     function renderSchedule(items) {
       if (!items || items.length === 0) {
-        document.getElementById('content').innerHTML = '<p style="text-align:center;">Расписание пока пусто</p>';
+        document.getElementById('content').innerHTML = '<p style="text-align:center;">Расписание пусто</p>';
         return;
       }
 
-      // Группируем строки по дням недели:
       const days = {};
       items.forEach(item => {
         if (!days[item.day]) days[item.day] = [];
@@ -124,7 +140,7 @@
             <div class="slot-item">
               <span class="slot-time">${slot.time}</span>
               ${isFree 
-                ? `<button class="btn-free">Записаться</button>` 
+                ? `<button class="btn-free" onclick="bookSlot(${slot.row}, '${slot.day}', '${slot.time}', this)">Записаться</button>` 
                 : `<span class="badge-booked">👤 ${slot.name}</span>`}
             </div>
           `;
@@ -135,6 +151,38 @@
 
       document.getElementById('content').innerHTML = html;
     }
+
+    // 4. Логика записи при клике:
+    function bookSlot(row, day, time, btn) {
+      const confirmBooking = confirm("Записаться на " + day + " в " + time + " под именем " + currentUser.name + "?");
+      if (!confirmBooking) return;
+
+      btn.innerText = "⏳ Запись...";
+      btn.disabled = true;
+
+      const url = API_URL + "?action=book&row=" + row + "&name=" + encodeURIComponent(currentUser.name) + "&vk_id=" + encodeURIComponent(currentUser.id);
+
+      fetch(url)
+        .then(res => res.json())
+        .then(result => {
+          if (result.success) {
+            alert("✅ Вы успешно записаны!");
+            loadSchedule(); // Мгновенно обновляем экран
+          } else {
+            alert("❌ Ошибка: " + (result.error || "Не удалось записаться"));
+            loadSchedule();
+          }
+        })
+        .catch(err => {
+          alert("❌ Ошибка соединения");
+          console.error(err);
+          btn.innerText = "Записаться";
+          btn.disabled = false;
+        });
+    }
+
+    // Запуск при открытии:
+    loadSchedule();
   </script>
 </body>
 </html>
