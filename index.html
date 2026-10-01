@@ -20,12 +20,12 @@
     h2 {
       text-align: center;
       font-size: 19px;
-      margin: 4px 0 14px;
+      margin: 4px 0 12px;
       color: #2c3e50;
     }
     .tabs {
       display: none;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       background: #e1e3e6;
       padding: 3px;
       border-radius: 10px;
@@ -45,6 +45,48 @@
       background: #fff;
       color: #000;
       box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    /* Панель режима правки */
+    .edit-mode-bar {
+      display: none;
+      background: #fff3e0;
+      border: 1px solid #ffe0b2;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-edit-toggle {
+      background: #e5ebf1;
+      color: #224b7a;
+      border: none;
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .btn-save-batch {
+      background: #4bb34b;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-cancel-edit {
+      background: #e0e0e0;
+      color: #333;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
     }
     .day-card {
       background: #ffffff;
@@ -73,16 +115,14 @@
       font-weight: normal;
     }
     .btn-delete-day {
-      background: transparent;
-      border: none;
+      background: #ffebee;
+      border: 1px solid #ffcdd2;
       color: #d32f2f;
       font-size: 12px;
       cursor: pointer;
-      padding: 2px 6px;
+      padding: 4px 8px;
       border-radius: 6px;
-    }
-    .btn-delete-day:hover {
-      background: #ffebee;
+      font-weight: 600;
     }
     .slot-item {
       display: flex;
@@ -97,6 +137,14 @@
     .slot-time {
       font-weight: 600;
       font-size: 15px;
+    }
+    .input-time-inline {
+      width: 65px;
+      padding: 4px 6px;
+      border: 1px solid #2787f5;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
     }
     .slot-right {
       display: flex;
@@ -132,15 +180,14 @@
       cursor: pointer;
     }
     .btn-del-slot {
-      background: transparent;
-      color: #999;
+      background: #ffebee;
+      color: #d32f2f;
       border: none;
       font-size: 14px;
       cursor: pointer;
-      padding: 4px;
-    }
-    .btn-del-slot:hover {
-      color: #d32f2f;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: bold;
     }
     .admin-card {
       background: #fff;
@@ -193,12 +240,22 @@
       width: 100%;
       cursor: pointer;
     }
-    .lock-box {
-      background: #fff;
-      border-radius: 14px;
-      padding: 28px 20px;
-      text-align: center;
-      margin-top: 40px;
+    .preview-box {
+      background: #f8f9fb;
+      border: 1px solid #e1e3e6;
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .preview-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #eaeaea;
+      font-size: 13px;
     }
     .loading {
       text-align: center;
@@ -218,23 +275,43 @@
 
     <!-- Вкладка 1: Просмотр и запись -->
     <div id="tabSchedule">
+      
+      <!-- Панель управления правкой для админа -->
+      <div id="adminEditToggleBar" style="display:none; text-align:right;">
+        <button class="btn-edit-toggle" id="btnToggleEdit" onclick="toggleEditMode()">✏️ Включить режим правки</button>
+      </div>
+
+      <!-- Плашка сохранения при активном режиме правки -->
+      <div id="editModeBar" class="edit-mode-bar">
+        <span style="font-size:12px; font-weight:600; color:#e65100;">⚠️ Режим правки (чат молчит)</span>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-cancel-edit" onclick="cancelEditMode()">Отмена</button>
+          <button class="btn-save-batch" onclick="saveBatchSchedule()">💾 Сохранить в чат</button>
+        </div>
+      </div>
+
       <div id="content" class="loading">⏳ Загружаем расписание...</div>
     </div>
 
-    <!-- Вкладка 2: Панель добавления для админов -->
+    <!-- Вкладка 2: Добавление и Шаблоны -->
     <div id="tabAdmin" style="display:none;">
       
-      <!-- Блок 1: Умный шаблон от даты (без лишних надписей) -->
+      <!-- Блок 1: Умный шаблон с предпросмотром -->
       <div class="admin-card">
-        <h3>📋 Создать неделю по шаблону (Вт, Ср, Пт)</h3>
+        <h3>📋 Сформировать по шаблону (Вт 15-18, Ср 15-18, Пт 18-20)</h3>
         <div class="form-group">
           <label>Выберите любую дату нужной недели:</label>
           <input type="date" id="templateDate" class="input-field">
         </div>
-        <button class="btn-secondary" onclick="applyTemplate()">Сформировать неделю по шаблону</button>
+        <button class="btn-secondary" onclick="generateTemplatePreview()">Показать слоты шаблона</button>
+        
+        <div id="templatePreviewContainer" style="display:none;">
+          <div class="preview-box" id="templatePreviewList"></div>
+          <button class="btn-primary" style="margin-top:10px;" onclick="commitTemplateToSchedule()">🚀 Добавить эти дни в расписание</button>
+        </div>
       </div>
 
-      <!-- Блок 2: Точечное добавление времени/дня -->
+      <!-- Блок 2: Точечное добавление -->
       <div class="admin-card">
         <h3>✏️ Добавить отдельный день / время</h3>
         <div class="form-group">
@@ -242,8 +319,8 @@
           <input type="date" id="singleDate" class="input-field" onchange="updateDayLabel()">
         </div>
         <div class="form-group">
-          <label>Время (например, 16:00):</label>
-          <input type="text" id="singleTime" placeholder="16:00" class="input-field">
+          <label>Время (например, 15:30):</label>
+          <input type="text" id="singleTime" placeholder="15:30" class="input-field">
         </div>
         <div class="form-group">
           <label>Заметка к дню (только если нужна):</label>
@@ -260,14 +337,19 @@
 
     let currentUser = { name: "Ученик", id: "" };
     let adminList = [];
+    let scheduleData = [];       // Актуальное расписание из базы
+    let editDraft = [];          // Черновик в режиме правки
+    let isEditMode = false;      // Включен ли режим правки
+    let templateDraftSlots = []; // Слоты предпросмотра шаблона
+
     const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    // 1. Авторизация: берем ПОЛНОЕ имя и фамилию:
+    // 1. Авторизация: ПОЛНОЕ имя и фамилия:
     vkBridge.send('VKWebAppGetUserInfo')
       .then(user => {
         if (user && user.id) {
           currentUser.id = String(user.id);
-          currentUser.name = user.first_name + " " + user.last_name; // Имя полностью
+          currentUser.name = user.first_name + " " + user.last_name;
         }
         loadSchedule();
       })
@@ -284,7 +366,7 @@
         .then(data => {
           if (data.access_denied) {
             document.getElementById('content').innerHTML = `
-              <div class="lock-box">
+              <div style="background:#fff; border-radius:14px; padding:28px 20px; text-align:center; margin-top:40px;">
                 <div style="font-size:42px;margin-bottom:12px;">🔒</div>
                 <h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>
                 <p style="color:#555;font-size:14px;">${data.error}</p>
@@ -293,23 +375,29 @@
           }
 
           adminList = (data.admins || []).map(String);
+          scheduleData = data.schedule || [];
+
+          // Если админ — показываем панель управления:
           if (adminList.includes(currentUser.id)) {
             document.getElementById('adminTabs').style.display = 'flex';
+            document.getElementById('adminEditToggleBar').style.display = 'block';
           }
 
-          renderSchedule(data.schedule || []);
+          renderSchedule();
         });
     }
 
     // 3. Отрисовка расписания:
-    function renderSchedule(items) {
+    function renderSchedule() {
+      const items = isEditMode ? editDraft : scheduleData;
+
       if (!items || items.length === 0) {
-        document.getElementById('content').innerHTML = '<p style="text-align:center;color:#888;">Расписание пока пусто.<br>Администратор может добавить даты во вкладке выше.</p>';
+        document.getElementById('content').innerHTML = '<p style="text-align:center;color:#888;padding:30px;">Расписание пусто.</p>';
         return;
       }
 
       const daysMap = {};
-      items.forEach(slot => {
+      items.forEach((slot, index) => {
         if (!daysMap[slot.date]) {
           daysMap[slot.date] = {
             title: slot.day_title,
@@ -317,7 +405,7 @@
             slots: []
           };
         }
-        daysMap[slot.date].slots.push(slot);
+        daysMap[slot.date].slots.push({ ...slot, draftIndex: index });
       });
 
       let html = '';
@@ -332,7 +420,7 @@
                 <div class="day-title">✏️ ${dayObj.title}</div>
                 ${dayObj.note ? `<div class="day-note">${dayObj.note}</div>` : ''}
               </div>
-              ${isAdmin ? `<button class="btn-delete-day" onclick="deleteDay('${date}')" title="Удалить этот день целиком">✕ день</button>` : ''}
+              ${isEditMode ? `<button class="btn-delete-day" onclick="draftDeleteDay('${date}')">✕ Удалить день</button>` : ''}
             </div>
         `;
 
@@ -343,16 +431,25 @@
 
           html += `
             <div class="slot-item">
-              <span class="slot-time">${slot.time}</span>
+              ${isEditMode 
+                ? `<input type="text" class="input-time-inline" value="${slot.time}" onchange="draftUpdateTime(${slot.draftIndex}, this.value)">`
+                : `<span class="slot-time">${slot.time}</span>`}
+
               <div class="slot-right">
-                ${isFree 
+                ${!isEditMode && isFree 
                   ? `<button class="btn-free" onclick="bookSlot('${slot.date}', '${slot.time}', this)">Записаться</button>` 
-                  : `<span class="badge-booked">👤 ${slot.name}</span>`}
-                ${!isFree && canCancel 
+                  : ''}
+
+                ${!isFree 
+                  ? `<span class="badge-booked">👤 ${slot.name}</span>` 
+                  : ''}
+
+                ${!isEditMode && !isFree && canCancel 
                   ? `<button class="btn-cancel" title="Снять бронь" onclick="cancelSlot('${slot.date}', '${slot.time}', this)">✕</button>` 
                   : ''}
-                ${isFree && isAdmin 
-                  ? `<button class="btn-del-slot" title="Удалить это время" onclick="deleteSlot('${slot.date}', '${slot.time}')">🗑</button>` 
+
+                ${isEditMode 
+                  ? `<button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(${slot.draftIndex})">✕</button>` 
                   : ''}
               </div>
             </div>`;
@@ -364,31 +461,70 @@
       document.getElementById('content').innerHTML = html;
     }
 
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      if (tab === 'schedule') {
-        document.querySelector('.tab-btn:first-child').classList.add('active');
-        document.getElementById('tabSchedule').style.display = 'block';
-        document.getElementById('tabAdmin').style.display = 'none';
-      } else {
-        document.querySelector('.tab-btn:last-child').classList.add('active');
-        document.getElementById('tabSchedule').style.display = 'none';
-        document.getElementById('tabAdmin').style.display = 'block';
+    // 4. Логика режима редактирования:
+    function toggleEditMode() {
+      isEditMode = true;
+      editDraft = JSON.parse(JSON.stringify(scheduleData)); // Делаем локальную копию
+      document.getElementById('editModeBar').style.display = 'flex';
+      document.getElementById('adminEditToggleBar').style.display = 'none';
+      renderSchedule();
+    }
+
+    function cancelEditMode() {
+      isEditMode = false;
+      editDraft = [];
+      document.getElementById('editModeBar').style.display = 'none';
+      document.getElementById('adminEditToggleBar').style.display = 'block';
+      renderSchedule();
+    }
+
+    function draftDeleteSlot(index) {
+      editDraft.splice(index, 1);
+      renderSchedule();
+    }
+
+    function draftDeleteDay(date) {
+      if (!confirm("Удалить этот день со всеми слотами?")) return;
+      editDraft = editDraft.filter(s => s.date !== date);
+      renderSchedule();
+    }
+
+    function draftUpdateTime(index, newTime) {
+      if (editDraft[index]) {
+        editDraft[index].time = newTime.trim();
       }
     }
 
-    // Подсказка дня недели в календарике:
-    function updateDayLabel() {
-      const val = document.getElementById('singleDate').value;
-      if (!val) { document.getElementById('dayOfWeekLabel').innerText = ''; return; }
-      const [y, m, d] = val.split('-').map(Number);
-      const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-      const dayName = days[new Date(y, m - 1, d).getDay()];
-      document.getElementById('dayOfWeekLabel').innerText = `(${dayName})`;
+    // Сохранение пакета правок: шлет ОДИН запрос и ОДНО сообщение в ВК
+    function saveBatchSchedule() {
+      const btn = document.querySelector('.btn-save-batch');
+      btn.innerText = "⏳ Сохранение...";
+      btn.disabled = true;
+
+      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
+
+      fetch(url)
+        .then(res => res.json())
+        .then(res => {
+          btn.innerText = "💾 Сохранить в чат";
+          btn.disabled = false;
+          if (res.success) {
+            alert("✅ Изменения сохранены и отправлены в чат!");
+            cancelEditMode();
+            loadSchedule();
+          } else {
+            alert("❌ " + (res.error || "Ошибка"));
+          }
+        })
+        .catch(err => {
+          alert("Ошибка сети");
+          btn.innerText = "💾 Сохранить в чат";
+          btn.disabled = false;
+        });
     }
 
-    // ЧИСТЫЙ шаблон (Вт, Ср, Пт) без самовольных надписей:
-    function applyTemplate() {
+    // 5. Шаблон с предпросмотром (Вт 15-18, Ср 15-18, Пт 18-20):
+    function generateTemplatePreview() {
       const selected = document.getElementById('templateDate').value;
       if (!selected) return alert("Выберите дату недели!");
 
@@ -412,67 +548,128 @@
       const wed = getDate(2);
       const fri = getDate(4);
 
-      // Только дни и время, без постороннего текста:
-      const slots = [
-        { date: tue, time: "16:00", note: "" },
-        { date: tue, time: "17:00", note: "" },
-        { date: tue, time: "18:00", note: "" },
-        { date: wed, time: "15:00", note: "" },
-        { date: wed, time: "16:00", note: "" },
-        { date: wed, time: "17:00", note: "" },
-        { date: wed, time: "18:00", note: "" },
-        { date: fri, time: "18:00", note: "" },
-        { date: fri, time: "19:00", note: "" },
-        { date: fri, time: "20:00", note: "" }
+      // Вторник начинается с 15:00:
+      templateDraftSlots = [
+        { date: tue, dayTitle: "Вторник", time: "15:00" },
+        { date: tue, dayTitle: "Вторник", time: "16:00" },
+        { date: tue, dayTitle: "Вторник", time: "17:00" },
+        { date: tue, dayTitle: "Вторник", time: "18:00" },
+        { date: wed, dayTitle: "Среда", time: "15:00" },
+        { date: wed, dayTitle: "Среда", time: "16:00" },
+        { date: wed, dayTitle: "Среда", time: "17:00" },
+        { date: wed, dayTitle: "Среда", time: "18:00" },
+        { date: fri, dayTitle: "Пятница", time: "18:00" },
+        { date: fri, dayTitle: "Пятница", time: "19:00" },
+        { date: fri, dayTitle: "Пятница", time: "20:00" }
       ];
 
-      sendSlots(slots);
+      renderTemplatePreview();
+      document.getElementById('templatePreviewContainer').style.display = 'block';
     }
 
+    function renderTemplatePreview() {
+      let html = '';
+      templateDraftSlots.forEach((s, idx) => {
+        html += `
+          <div class="preview-row">
+            <span><b>${s.dayTitle}</b> (${s.date.split('-').slice(1).reverse().join('.')})</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" class="input-time-inline" value="${s.time}" onchange="templateDraftSlots[${idx}].time = this.value">
+              <span style="color:#d32f2f; cursor:pointer; font-weight:bold; padding:2px 6px;" onclick="removeTemplatePreviewSlot(${idx})">✕</span>
+            </div>
+          </div>`;
+      });
+      document.getElementById('templatePreviewList').innerHTML = html;
+    }
+
+    function removeTemplatePreviewSlot(idx) {
+      templateDraftSlots.splice(idx, 1);
+      renderTemplatePreview();
+    }
+
+    function commitTemplateToSchedule() {
+      if (templateDraftSlots.length === 0) return alert("Список слотов пуст!");
+
+      // Преобразуем слоты в финальный формат:
+      const newSlots = templateDraftSlots.map(s => ({
+        date: s.date,
+        time: s.time,
+        note: ""
+      }));
+
+      // Объединяем с текущим расписанием:
+      const combined = [...scheduleData, ...newSlots];
+
+      const btn = document.querySelector('#templatePreviewContainer .btn-primary');
+      btn.innerText = "⏳ Добавление...";
+      btn.disabled = true;
+
+      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(combined));
+
+      fetch(url)
+        .then(res => res.json())
+        .then(res => {
+          btn.innerText = "🚀 Добавить эти дни в расписание";
+          btn.disabled = false;
+          if (res.success) {
+            alert("✅ Дни успешно добавлены!");
+            document.getElementById('templatePreviewContainer').style.display = 'none';
+            switchTab('schedule');
+            loadSchedule();
+          } else {
+            alert("❌ " + (res.error || "Ошибка"));
+          }
+        });
+    }
+
+    // 6. Добавление одного слота:
     function addSingleSlot() {
       const date = document.getElementById('singleDate').value;
       const time = document.getElementById('singleTime').value.trim();
       const note = document.getElementById('singleNote').value.trim();
       if (!date || !time) return alert("Укажите дату и время!");
 
-      sendSlots([{ date, time, note }]);
-    }
+      const newSlot = { date, time, note };
+      const combined = [...scheduleData, newSlot];
 
-    function sendSlots(slots) {
-      const url = API_URL + "?action=add_slots&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(slots));
+      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(combined));
+
       fetch(url)
         .then(res => res.json())
         .then(res => {
           if (res.success) {
-            alert("✅ Добавлено в расписание!");
+            alert("✅ Слот добавлен!");
             switchTab('schedule');
             loadSchedule();
           } else {
-            alert(res.error || "Ошибка");
+            alert("❌ " + (res.error || "Ошибка"));
           }
         });
     }
 
-    function deleteDay(date) {
-      if (!confirm("Удалить этот день целиком со всеми слотами?")) return;
-      fetch(API_URL + "?action=delete_day&date=" + date + "&vk_id=" + encodeURIComponent(currentUser.id))
-        .then(res => res.json())
-        .then(res => {
-          if (res.success) loadSchedule();
-          else alert(res.error);
-        });
+    function updateDayLabel() {
+      const val = document.getElementById('singleDate').value;
+      if (!val) { document.getElementById('dayOfWeekLabel').innerText = ''; return; }
+      const [y, m, d] = val.split('-').map(Number);
+      const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+      const dayName = days[new Date(y, m - 1, d).getDay()];
+      document.getElementById('dayOfWeekLabel').innerText = `(${dayName})`;
     }
 
-    function deleteSlot(date, time) {
-      if (!confirm("Удалить время " + time + "?")) return;
-      fetch(API_URL + "?action=delete_slot&date=" + date + "&time=" + time + "&vk_id=" + encodeURIComponent(currentUser.id))
-        .then(res => res.json())
-        .then(res => {
-          if (res.success) loadSchedule();
-          else alert(res.error);
-        });
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      if (tab === 'schedule') {
+        document.querySelector('.tab-btn:first-child').classList.add('active');
+        document.getElementById('tabSchedule').style.display = 'block';
+        document.getElementById('tabAdmin').style.display = 'none';
+      } else {
+        document.querySelector('.tab-btn:last-child').classList.add('active');
+        document.getElementById('tabSchedule').style.display = 'none';
+        document.getElementById('tabAdmin').style.display = 'block';
+      }
     }
 
+    // 7. Одиночная запись и отмена ученика:
     function bookSlot(date, time, btn) {
       if (!confirm("Записаться на " + time + " под именем " + currentUser.name + "?")) return;
       btn.innerText = "⏳";
@@ -482,7 +679,7 @@
         .then(res => res.json())
         .then(res => {
           if (res.success) loadSchedule();
-          else alert(res.error || "Ошибка");
+          else alert(res.error || "Ошибка записи");
         });
     }
 
@@ -495,7 +692,7 @@
         .then(res => res.json())
         .then(res => {
           if (res.success) loadSchedule();
-          else alert(res.error);
+          else alert(res.error || "Ошибка отмены");
         });
     }
   </script>
