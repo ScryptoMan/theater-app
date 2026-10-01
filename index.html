@@ -3,55 +3,138 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Запись на занятия</title>
-  <!-- Библиотека связи с ВК: -->
+  <title>Запись на мастерство</title>
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body {
       margin: 0;
-      padding: 24px 16px;
+      padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: #edeef0;
-      color: #222;
-      text-align: center;
+      color: #000;
     }
-    .card {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-      max-width: 420px;
+    .container {
+      max-width: 440px;
       margin: 0 auto;
     }
-    h2 { margin-top: 0; color: #2c3e50; }
-    .badge {
-      display: inline-block;
-      background: #e8f5e9;
-      color: #2e7d32;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: bold;
-      margin: 15px 0;
+    h2 {
+      text-align: center;
+      font-size: 19px;
+      margin: 8px 0 16px;
+      color: #2c3e50;
+    }
+    .day-card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .day-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #224b7a;
+      border-bottom: 1px solid #f2f3f5;
+      padding-bottom: 6px;
+    }
+    .slot-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px dashed #f5f5f5;
+    }
+    .slot-item:last-child {
+      border-bottom: none;
+    }
+    .slot-time {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .badge-booked {
+      background: #f0f2f5;
+      color: #656565;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .btn-free {
+      background: #4bb34b;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .loading {
+      text-align: center;
+      padding: 30px;
+      color: #777;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>🎭 Театр: Запись на мастерство</h2>
-    <div class="badge" id="status">⏳ Подключение к ВК...</div>
-    <p>Окно успешно открылось прямо в беседе!</p>
+  <div class="container">
+    <h2>🎭 Индивидуальное мастерство</h2>
+    <div id="content" class="loading">⏳ Загружаем актуальное расписание...</div>
   </div>
 
   <script>
-    // Мгновенный сигнал в ВК "Я загрузилось":
-    vkBridge.send('VKWebAppInit')
-      .then(() => {
-        document.getElementById('status').innerText = '✅ Соединение с ВК успешно!';
+    // 1. Инициализация ВК:
+    vkBridge.send('VKWebAppInit');
+
+    // 2. Адрес вашей Google Таблицы:
+    const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
+
+    // 3. Запрос данных из таблицы:
+    fetch(API_URL)
+      .then(res => res.json())
+      .then(data => {
+        renderSchedule(data);
       })
-      .catch((err) => {
-        document.getElementById('status').innerText = 'Ошибка инициализации';
+      .catch(err => {
+        document.getElementById('content').innerHTML = '<p style="color:red;text-align:center;">Не удалось загрузить данные из таблицы</p>';
         console.error(err);
       });
+
+    // 4. Отрисовка карточек с днями:
+    function renderSchedule(items) {
+      if (!items || items.length === 0) {
+        document.getElementById('content').innerHTML = '<p style="text-align:center;">Расписание пока пусто</p>';
+        return;
+      }
+
+      // Группируем строки по дням недели:
+      const days = {};
+      items.forEach(item => {
+        if (!days[item.day]) days[item.day] = [];
+        days[item.day].push(item);
+      });
+
+      let html = '';
+      for (const day in days) {
+        html += `<div class="day-card"><div class="day-title">🗓 ${day}</div>`;
+        
+        days[day].forEach(slot => {
+          const isFree = (slot.status === 'Свободно');
+          html += `
+            <div class="slot-item">
+              <span class="slot-time">${slot.time}</span>
+              ${isFree 
+                ? `<button class="btn-free">Записаться</button>` 
+                : `<span class="badge-booked">👤 ${slot.name}</span>`}
+            </div>
+          `;
+        });
+
+        html += `</div>`;
+      }
+
+      document.getElementById('content').innerHTML = html;
+    }
   </script>
 </body>
 </html>
