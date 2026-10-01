@@ -224,7 +224,7 @@
     <!-- Вкладка 2: Панель добавления для админов -->
     <div id="tabAdmin" style="display:none;">
       
-      <!-- Блок 1: Умный шаблон от даты -->
+      <!-- Блок 1: Умный шаблон от даты (без лишних надписей) -->
       <div class="admin-card">
         <h3>📋 Создать неделю по шаблону (Вт, Ср, Пт)</h3>
         <div class="form-group">
@@ -246,8 +246,8 @@
           <input type="text" id="singleTime" placeholder="16:00" class="input-field">
         </div>
         <div class="form-group">
-          <label>Заметка к дню (необязательно):</label>
-          <input type="text" id="singleNote" placeholder="запись до 19:00 (не вкл)" class="input-field">
+          <label>Заметка к дню (только если нужна):</label>
+          <input type="text" id="singleNote" placeholder="Оставьте пустым, если не нужно" class="input-field">
         </div>
         <button class="btn-primary" onclick="addSingleSlot()">+ Добавить слот в расписание</button>
       </div>
@@ -267,7 +267,7 @@
       .then(user => {
         if (user && user.id) {
           currentUser.id = String(user.id);
-          currentUser.name = user.first_name + " " + user.last_name; // ИМЯ ПОЛНОСТЬЮ
+          currentUser.name = user.first_name + " " + user.last_name; // Имя полностью
         }
         loadSchedule();
       })
@@ -308,7 +308,6 @@
         return;
       }
 
-      // Группируем по уникальным датам:
       const daysMap = {};
       items.forEach(slot => {
         if (!daysMap[slot.date]) {
@@ -388,7 +387,7 @@
       document.getElementById('dayOfWeekLabel').innerText = `(${dayName})`;
     }
 
-    // Применение шаблона (Вт, Ср, Пт):
+    // ЧИСТЫЙ шаблон (Вт, Ср, Пт) без самовольных надписей:
     function applyTemplate() {
       const selected = document.getElementById('templateDate').value;
       if (!selected) return alert("Выберите дату недели!");
@@ -413,14 +412,15 @@
       const wed = getDate(2);
       const fri = getDate(4);
 
+      // Только дни и время, без постороннего текста:
       const slots = [
-        { date: tue, time: "16:00", note: "запись до 19:00 (не вкл)" },
-        { date: tue, time: "17:00", note: "запись до 19:00 (не вкл)" },
-        { date: tue, time: "18:00", note: "запись до 19:00 (не вкл)" },
-        { date: wed, time: "15:00", note: "запись до 19:00 (не вкл)" },
-        { date: wed, time: "16:00", note: "запись до 19:00 (не вкл)" },
-        { date: wed, time: "17:00", note: "запись до 19:00 (не вкл)" },
-        { date: wed, time: "18:00", note: "запись до 19:00 (не вкл)" },
+        { date: tue, time: "16:00", note: "" },
+        { date: tue, time: "17:00", note: "" },
+        { date: tue, time: "18:00", note: "" },
+        { date: wed, time: "15:00", note: "" },
+        { date: wed, time: "16:00", note: "" },
+        { date: wed, time: "17:00", note: "" },
+        { date: wed, time: "18:00", note: "" },
         { date: fri, time: "18:00", note: "" },
         { date: fri, time: "19:00", note: "" },
         { date: fri, time: "20:00", note: "" }
@@ -429,7 +429,6 @@
       sendSlots(slots);
     }
 
-    // Добавление одного слота:
     function addSingleSlot() {
       const date = document.getElementById('singleDate').value;
       const time = document.getElementById('singleTime').value.trim();
@@ -465,7 +464,7 @@
     }
 
     function deleteSlot(date, time) {
-      if (!confirm("Удалить слот " + time + "?")) return;
+      if (!confirm("Удалить время " + time + "?")) return;
       fetch(API_URL + "?action=delete_slot&date=" + date + "&time=" + time + "&vk_id=" + encodeURIComponent(currentUser.id))
         .then(res => res.json())
         .then(res => {
@@ -474,7 +473,6 @@
         });
     }
 
-    // Запись и отмена:
     function bookSlot(date, time, btn) {
       if (!confirm("Записаться на " + time + " под именем " + currentUser.name + "?")) return;
       btn.innerText = "⏳";
@@ -497,7 +495,7 @@
         .then(res => res.json())
         .then(res => {
           if (res.success) loadSchedule();
-          else alert(res.error || "Ошибка");
+          else alert(res.error);
         });
     }
   </script>
