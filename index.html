@@ -14,7 +14,7 @@
       color: #000;
     }
     .container {
-      max-width: 460px;
+      max-width: 480px;
       margin: 0 auto;
     }
     h2 {
@@ -143,6 +143,14 @@
       border-radius: 6px;
       font-weight: 600;
       font-size: 14px;
+    }
+    .select-member-inline {
+      max-width: 145px;
+      padding: 5px 6px;
+      border: 1px solid #2787f5;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
     }
     .slot-right {
       display: flex;
@@ -289,10 +297,9 @@
       <div id="content" class="loading">⏳ Загружаем расписание...</div>
     </div>
 
-    <!-- Вкладка 2: Единый конструктор для админа -->
+    <!-- Вкладка 2: Конструктор для админа -->
     <div id="tabAdmin" style="display:none;">
       
-      <!-- Панель инструментов добавления -->
       <div class="admin-card">
         <h3>⚡ Добавить слоты в расписание</h3>
         
@@ -317,7 +324,7 @@
         </div>
       </div>
 
-      <!-- Единый визуальный черновик добавляемых слотов -->
+      <!-- Черновик добавляемых слотов -->
       <div class="admin-card" id="draftCard" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <h3 style="margin:0;">📝 Слоты к добавлению:</h3>
@@ -337,6 +344,7 @@
 
     let currentUser = { name: "Ученик", id: "" };
     let adminList = [];
+    let chatProfiles = [];       // Все участники беседы для выпадающего списка
     let scheduleData = [];       // Актуальное расписание
     let editDraft = [];          // Черновик в режиме правки
     let isEditMode = false;      
@@ -375,6 +383,7 @@
           }
 
           adminList = (data.admins || []).map(String);
+          chatProfiles = data.profiles || []; // Сохраняем список людей из чата
           scheduleData = data.schedule || [];
 
           if (adminList.includes(currentUser.id)) {
@@ -391,7 +400,7 @@
       const items = isEditMode ? editDraft : scheduleData;
 
       if (!items || items.length === 0) {
-        document.getElementById('content').innerHTML = '<p style="text-align:center;color:#888;padding:30px;">Расписание пусто.</p>';
+        document.getElementById('content').innerHTML = '<p style="text-align:center;color:#888;padding:30px;">Расписание пусто.<br>Занятия не назначены.</p>';
         return;
       }
 
@@ -423,8 +432,7 @@
         `;
 
         dayObj.slots.forEach(slot => {
-          const isFree = (slot.status === 'Свободно');
-          // В ОБЫЧНОМ РЕЖИМЕ крестик виден ТОЛЬКО владельцу записи!
+          const isFree = (slot.status === 'Свободно' || !slot.name);
           const isMySlot = currentUser.id && (String(slot.vk_id) === currentUser.id);
 
           html += `
@@ -434,23 +442,35 @@
                 : `<span class="slot-time">${slot.time}</span>`}
 
               <div class="slot-right">
+                
+                <!-- ОБЫЧНЫЙ РЕЖИМ -->
                 ${!isEditMode && isFree 
                   ? `<button class="btn-free" onclick="bookSlot('${slot.date}', '${slot.time}', this)">Записаться</button>` 
                   : ''}
 
-                ${!isFree 
+                ${!isEditMode && !isFree 
                   ? `<span class="badge-booked">👤 ${slot.name}</span>` 
                   : ''}
 
-                <!-- В обычном режиме отменить может ТОЛЬКО автор своей брони -->
                 ${!isEditMode && !isFree && isMySlot 
                   ? `<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot('${slot.date}', '${slot.time}', this)">✕</button>` 
                   : ''}
 
-                <!-- В режиме правки админ может удалить любой слот -->
+                <!-- РЕЖИМ ПРАВКИ АДМИНА: выпадающий список участников для назначения -->
                 ${isEditMode 
-                  ? `<button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(${slot.draftIndex})">✕</button>` 
+                  ? `
+                    <select class="select-member-inline" onchange="draftAssignMember(${slot.draftIndex}, this.value)">
+                      <option value="" ${isFree ? 'selected' : ''}>[Свободно]</option>
+                      ${chatProfiles.map(p => `
+                        <option value="${p.id}" ${(!isFree && (String(slot.vk_id) === p.id || slot.name === p.name)) ? 'selected' : ''}>
+                          ${p.name}
+                        </option>
+                      `).join('')}
+                    </select>
+                    <button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(${slot.draftIndex})">✕</button>
+                  ` 
                   : ''}
+
               </div>
             </div>`;
         });
@@ -461,7 +481,7 @@
       document.getElementById('content').innerHTML = html;
     }
 
-    // 4. Режим правки расписания (Админ):
+    // 4. Логика режима правки админа:
     function toggleEditMode() {
       isEditMode = true;
       editDraft = JSON.parse(JSON.stringify(scheduleData));
@@ -495,12 +515,34 @@
       }
     }
 
+    // Ручное назначение любого участника из беседы на слот:
+    function draftAssignMember(index, selectedVkId) {
+      if (!editDraft[index]) return;
+
+      if (!selectedVkId) {
+        editDraft[index].name = "";
+        editDraft[index].status = "Свободно";
+        editDraft[index].vk_id = "";
+        editDraft[index].forceClear = true; // Явное очищение
+      } else {
+        const found = chatProfiles.find(p => p.id === selectedVkId);
+        editDraft[index].name = found ? found.name : "Ученик";
+        editDraft[index].status = "Занято";
+        editDraft[index].vk_id = selectedVkId;
+        editDraft[index].forceClear = false;
+      }
+    }
+
+    // Сохранение всех правок админа:
     function saveBatchSchedule() {
       const btn = document.querySelector('.btn-save-batch');
       btn.innerText = "⏳ Сохранение...";
       btn.disabled = true;
 
-      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
+      const logText = "⚙️ " + currentUser.name + " — Правка расписания";
+      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                  "&action_desc=" + encodeURIComponent(logText) + 
+                  "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
 
       fetch(url)
         .then(res => res.json())
@@ -522,7 +564,7 @@
         });
     }
 
-    // 5. Единый конструктор добавления слотов (Вкладка 2):
+    // 5. Конструктор добавления слотов:
     function addTemplateToDraft() {
       const selected = document.getElementById('templateDate').value;
       if (!selected) return alert("Выберите дату недели!");
@@ -561,7 +603,6 @@
         { date: fri, dayTitle: "Пятница", time: "20:00" }
       ];
 
-      // Добавляем с автозамещением дублей:
       templateSlots.forEach(s => pushSlotToDraft(s.date, s.dayTitle, s.time));
       renderDraftList();
     }
@@ -580,7 +621,6 @@
       renderDraftList();
     }
 
-    // Добавление в черновик с замещением дубликатов времени:
     function pushSlotToDraft(date, dayTitle, time) {
       const existingIdx = builderDraft.findIndex(s => s.date === date && s.time === time);
       if (existingIdx !== -1) {
@@ -588,7 +628,6 @@
       } else {
         builderDraft.push({ date, dayTitle, time });
       }
-      // Сортировка черновика по дате и времени:
       builderDraft.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     }
 
@@ -623,7 +662,6 @@
       renderDraftList();
     }
 
-    // Сохранение черновика в главное расписание (с объединением):
     function commitDraftToSchedule() {
       if (builderDraft.length === 0) return;
 
@@ -631,10 +669,9 @@
       btn.innerText = "⏳ Сохранение...";
       btn.disabled = true;
 
-      // Объединяем существующее расписание и черновик с автозамещением дублей:
       const map = {};
       scheduleData.forEach(s => {
-        map[s.date + "_" + s.time] = s; // Сохраняем уже записанных людей
+        map[s.date + "_" + s.time] = s;
       });
 
       builderDraft.forEach(s => {
@@ -652,8 +689,10 @@
       });
 
       const mergedSlots = Object.values(map);
-
-      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
+      const logText = "📅 " + currentUser.name + " — Добавлены новые дни";
+      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                  "&action_desc=" + encodeURIComponent(logText) + 
+                  "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
 
       fetch(url)
         .then(res => res.json())
