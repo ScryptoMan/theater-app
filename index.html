@@ -81,16 +81,13 @@
       padding: 5px 9px;
       border-radius: 8px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: bold;
       cursor: pointer;
-    }
-    .btn-cancel:hover {
-      background: #ffcdd2;
     }
     .lock-box {
       background: #fff;
       border-radius: 14px;
-      padding: 24px;
+      padding: 28px 20px;
       text-align: center;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       margin-top: 40px;
@@ -111,57 +108,58 @@
   <script>
     vkBridge.send('VKWebAppInit');
 
-    // 1. Проверка: запущено ли приложение из беседы:
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasChatContext = urlParams.has('vk_chat_id');
-
-    if (!hasChatContext) {
-      document.getElementById('content').innerHTML = `
-        <div class="lock-box">
-          <div style="font-size:36px;margin-bottom:10px;">🔒</div>
-          <h3 style="margin:0 0 8px;">Доступ ограничен</h3>
-          <p style="color:#666;font-size:14px;line-height:1.4;">Это приложение работает только внутри беседы театра. Пожалуйста, открывайте его по кнопке из чата.</p>
-        </div>
-      `;
-    } else {
-      initApp();
-    }
-
     let currentUser = { name: "Ученик", id: "" };
     let adminList = [];
     const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    function initApp() {
-      // Получаем данные текущего пользователя:
-      vkBridge.send('VKWebAppGetUserInfo')
-        .then(user => {
-          if (user && user.first_name) {
-            currentUser.name = user.first_name + " " + (user.last_name ? user.last_name[0] + "." : "");
-            currentUser.id = String(user.id);
-          }
-          loadSchedule();
-        })
-        .catch(() => {
-          loadSchedule();
-        });
-    }
+    // 1. Авторизация через ВК:
+    vkBridge.send('VKWebAppGetUserInfo')
+      .then(user => {
+        if (user && user.id) {
+          currentUser.id = String(user.id);
+          currentUser.name = user.first_name + " " + (user.last_name ? user.last_name[0] + "." : "");
+        }
+        loadSchedule();
+      })
+      .catch(() => {
+        // Запасной способ получить ID из ссылки ВК:
+        const urlParams = new URLSearchParams(window.location.search);
+        currentUser.id = urlParams.get('vk_user_id') || "";
+        loadSchedule();
+      });
 
+    // 2. Запрос расписания с передачей ID для проверки доступа:
     function loadSchedule() {
-      fetch(API_URL)
+      const url = API_URL + "?vk_id=" + encodeURIComponent(currentUser.id);
+      
+      fetch(url)
         .then(res => res.json())
         .then(data => {
+          // Если Google Таблица не нашла человека в беседе:
+          if (data.access_denied) {
+            document.getElementById('content').innerHTML = `
+              <div class="lock-box">
+                <div style="font-size:42px;margin-bottom:12px;">🔒</div>
+                <h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>
+                <p style="color:#555;font-size:14px;line-height:1.5;">${data.error}</p>
+              </div>
+            `;
+            return;
+          }
+
           adminList = (data.admins || []).map(String);
           renderSchedule(data.schedule || []);
         })
         .catch(err => {
-          document.getElementById('content').innerHTML = '<p style="color:red;text-align:center;">Ошибка загрузки</p>';
+          document.getElementById('content').innerHTML = '<p style="color:red;text-align:center;">Ошибка соединения</p>';
           console.error(err);
         });
     }
 
+    // 3. Отрисовка расписания:
     function renderSchedule(items) {
       if (!items || items.length === 0) {
-        document.getElementById('content').innerHTML = '<p style="text-align:center;">Расписание пусто</p>';
+        document.getElementById('content').innerHTML = '<p style="text-align:center;">Расписание пока пусто</p>';
         return;
       }
 
@@ -202,9 +200,10 @@
       document.getElementById('content').innerHTML = html;
     }
 
+    // 4. Запись:
     function bookSlot(row, day, time, btn) {
       if (!confirm("Записаться на " + day + " в " + time + " под именем " + currentUser.name + "?")) return;
-      btn.innerText = "⏳ ...";
+      btn.innerText = "⏳";
       btn.disabled = true;
 
       fetch(API_URL + "?action=book&row=" + row + "&name=" + encodeURIComponent(currentUser.name) + "&vk_id=" + encodeURIComponent(currentUser.id))
@@ -219,6 +218,7 @@
         });
     }
 
+    // 5. Отмена:
     function cancelSlot(row, day, time, btn) {
       if (!confirm("Отменить запись на " + day + " в " + time + "?")) return;
       btn.innerText = "⏳";
