@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Индивидуальное мастерство</title>
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
@@ -12,6 +12,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: #edeef0;
       color: #000;
+      -webkit-tap-highlight-color: transparent;
     }
     .container {
       max-width: 480px;
@@ -22,6 +23,9 @@
       font-size: 19px;
       margin: 4px 0 12px;
       color: #2c3e50;
+    }
+    button {
+      touch-action: manipulation;
     }
     .tabs {
       display: none;
@@ -268,6 +272,61 @@
       padding: 30px;
       color: #777;
     }
+    /* Универсальное модальное окно вместо alert/confirm для iOS */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .modal-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 320px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #222;
+    }
+    .modal-text {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 18px;
+      line-height: 1.4;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .modal-btn-ok {
+      background: #2787f5;
+      color: #fff;
+    }
+    .modal-btn-cancel {
+      background: #edeef0;
+      color: #444;
+    }
   </style>
 </head>
 <body>
@@ -303,7 +362,6 @@
       <div class="admin-card">
         <h3>⚡ Добавить слоты в расписание</h3>
         
-        <!-- 1. Быстрый шаблон недели -->
         <div class="form-group" style="background:#f4f6f9; padding:10px; border-radius:10px; margin-bottom:12px;">
           <label style="font-weight:600;">1. Вставить неделю по шаблону (Вт 15-18, Ср 15-18, Пт 18-20):</label>
           <div style="display:flex; gap:8px; margin-top:6px;">
@@ -312,7 +370,6 @@
           </div>
         </div>
 
-        <!-- 2. Точечный отдельный слот -->
         <div class="form-group" style="background:#f4f6f9; padding:10px; border-radius:10px;">
           <label style="font-weight:600;">2. Или добавить один день / время:</label>
           <div style="display:flex; gap:6px; margin-top:6px;">
@@ -324,7 +381,6 @@
         </div>
       </div>
 
-      <!-- Черновик добавляемых слотов -->
       <div class="admin-card" id="draftCard" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <h3 style="margin:0;">📝 Слоты к добавлению:</h3>
@@ -339,30 +395,72 @@
     </div>
   </div>
 
+  <!-- Надежное всплывающее окно для iPhone и Android -->
+  <div id="customModal" class="modal-overlay">
+    <div class="modal-card">
+      <div id="modalTitle" class="modal-title">Подтверждение</div>
+      <div id="modalText" class="modal-text"></div>
+      <div class="modal-actions">
+        <button id="modalBtnCancel" class="modal-btn modal-btn-cancel">Отмена</button>
+        <button id="modalBtnOk" class="modal-btn modal-btn-ok">Да</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     vkBridge.send('VKWebAppInit');
 
     let currentUser = { name: "Ученик", id: "" };
     let adminList = [];
-    let chatProfiles = [];       // Все участники беседы для выпадающего списка
-    let scheduleData = [];       // Актуальное расписание
-    let editDraft = [];          // Черновик в режиме правки
-    let isEditMode = false;      
-    let builderDraft = [];       // Черновик новых добавляемых слотов
+    let chatProfiles = [];
+    let scheduleData = [];
+    let editDraft = [];
+    let isEditMode = false;
+    let builderDraft = [];
 
     const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
+    // 0. Замена alert/confirm для работы на iOS:
+    function showModal(title, text, isConfirm, onOk) {
+      var modal = document.getElementById('customModal');
+      var t = document.getElementById('modalTitle');
+      var m = document.getElementById('modalText');
+      var btnOk = document.getElementById('modalBtnOk');
+      var btnCancel = document.getElementById('modalBtnCancel');
+
+      t.innerText = title || "Внимание";
+      m.innerText = text || "";
+      btnCancel.style.display = isConfirm ? 'block' : 'none';
+      modal.style.display = 'flex';
+
+      btnOk.onclick = function() {
+        modal.style.display = 'none';
+        if (onOk) onOk();
+      };
+      btnCancel.onclick = function() {
+        modal.style.display = 'none';
+      };
+    }
+
+    function appConfirm(text, onOk) {
+      showModal("Подтверждение", text, true, onOk);
+    }
+
+    function appAlert(text) {
+      showModal("Сообщение", text, false);
+    }
+
     // 1. Авторизация:
     vkBridge.send('VKWebAppGetUserInfo')
-      .then(user => {
+      .then(function(user) {
         if (user && user.id) {
           currentUser.id = String(user.id);
           currentUser.name = user.first_name + " " + user.last_name;
         }
         loadSchedule();
       })
-      .catch(() => {
-        const urlParams = new URLSearchParams(window.location.search);
+      .catch(function() {
+        var urlParams = new URLSearchParams(window.location.search);
         currentUser.id = urlParams.get('vk_user_id') || "";
         loadSchedule();
       });
@@ -370,42 +468,44 @@
     // 2. Загрузка данных:
     function loadSchedule() {
       fetch(API_URL + "?vk_id=" + encodeURIComponent(currentUser.id))
-        .then(res => res.json())
-        .then(data => {
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
           if (data.access_denied) {
-            document.getElementById('content').innerHTML = `
-              <div style="background:#fff; border-radius:14px; padding:28px 20px; text-align:center; margin-top:40px;">
-                <div style="font-size:42px;margin-bottom:12px;">🔒</div>
-                <h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>
-                <p style="color:#555;font-size:14px;">${data.error}</p>
-              </div>`;
+            document.getElementById('content').innerHTML = 
+              '<div style="background:#fff; border-radius:14px; padding:28px 20px; text-align:center; margin-top:40px;">' +
+              '<div style="font-size:42px;margin-bottom:12px;">🔒</div>' +
+              '<h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>' +
+              '<p style="color:#555;font-size:14px;">' + (data.error || "") + '</p></div>';
             return;
           }
 
           adminList = (data.admins || []).map(String);
-          chatProfiles = data.profiles || []; // Сохраняем список людей из чата
+          chatProfiles = data.profiles || [];
           scheduleData = data.schedule || [];
 
-          if (adminList.includes(currentUser.id)) {
+          if (adminList.indexOf(currentUser.id) !== -1) {
             document.getElementById('adminTabs').style.display = 'flex';
             document.getElementById('adminEditToggleBar').style.display = 'block';
           }
 
           renderSchedule();
+        })
+        .catch(function() {
+          document.getElementById('content').innerHTML = '<p style="text-align:center;color:red;">Ошибка соединения с сервером</p>';
         });
     }
 
     // 3. Отрисовка расписания:
     function renderSchedule() {
-      const items = isEditMode ? editDraft : scheduleData;
+      var items = isEditMode ? editDraft : scheduleData;
 
       if (!items || items.length === 0) {
         document.getElementById('content').innerHTML = '<p style="text-align:center;color:#888;padding:30px;">Расписание пусто.<br>Занятия не назначены.</p>';
         return;
       }
 
-      const daysMap = {};
-      items.forEach((slot, index) => {
+      var daysMap = {};
+      items.forEach(function(slot, index) {
         if (!daysMap[slot.date]) {
           daysMap[slot.date] = {
             title: slot.day_title,
@@ -413,75 +513,65 @@
             slots: []
           };
         }
-        daysMap[slot.date].slots.push({ ...slot, draftIndex: index });
+        var sCopy = Object.assign({}, slot);
+        sCopy.draftIndex = index;
+        daysMap[slot.date].slots.push(sCopy);
       });
 
-      let html = '';
+      var html = '';
 
-      for (const date in daysMap) {
-        const dayObj = daysMap[date];
-        html += `
-          <div class="day-card">
-            <div class="day-header">
-              <div>
-                <div class="day-title">✏️ ${dayObj.title}</div>
-                ${dayObj.note ? `<div class="day-note">${dayObj.note}</div>` : ''}
-              </div>
-              ${isEditMode ? `<button class="btn-delete-day" onclick="draftDeleteDay('${date}')">✕ Удалить день</button>` : ''}
-            </div>
-        `;
+      for (var date in daysMap) {
+        var dayObj = daysMap[date];
+        html += '<div class="day-card">' +
+          '<div class="day-header"><div><div class="day-title">✏️ ' + dayObj.title + '</div>' +
+          (dayObj.note ? '<div class="day-note">' + dayObj.note + '</div>' : '') + '</div>' +
+          (isEditMode ? '<button class="btn-delete-day" onclick="draftDeleteDay(\'' + date + '\')">✕ Удалить день</button>' : '') +
+          '</div>';
 
-        dayObj.slots.forEach(slot => {
-          const isFree = (slot.status === 'Свободно' || !slot.name);
-          const isMySlot = currentUser.id && (String(slot.vk_id) === currentUser.id);
+        dayObj.slots.forEach(function(slot) {
+          var isFree = (slot.status === 'Свободно' || !slot.name);
+          var isMySlot = currentUser.id && (String(slot.vk_id) === currentUser.id);
 
-          html += `
-            <div class="slot-item">
-              ${isEditMode 
-                ? `<input type="text" class="input-time-inline" value="${slot.time}" onchange="draftUpdateTime(${slot.draftIndex}, this.value)">`
-                : `<span class="slot-time">${slot.time}</span>`}
+          html += '<div class="slot-item">' +
+            (isEditMode 
+              ? '<input type="text" class="input-time-inline" value="' + slot.time + '" onchange="draftUpdateTime(' + slot.draftIndex + ', this.value)">'
+              : '<span class="slot-time">' + slot.time + '</span>') +
+            '<div class="slot-right">';
 
-              <div class="slot-right">
-                
-                <!-- ОБЫЧНЫЙ РЕЖИМ -->
-                ${!isEditMode && isFree 
-                  ? `<button class="btn-free" onclick="bookSlot('${slot.date}', '${slot.time}', this)">Записаться</button>` 
-                  : ''}
+          if (!isEditMode && isFree) {
+            html += '<button class="btn-free" onclick="bookSlot(\'' + slot.date + '\', \'' + slot.time + '\', this)">Записаться</button>';
+          }
 
-                ${!isEditMode && !isFree 
-                  ? `<span class="badge-booked">👤 ${slot.name}</span>` 
-                  : ''}
+          if (!isFree) {
+            html += '<span class="badge-booked">👤 ' + slot.name + '</span>';
+          }
 
-                ${!isEditMode && !isFree && isMySlot 
-                  ? `<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot('${slot.date}', '${slot.time}', this)">✕</button>` 
-                  : ''}
+          if (!isEditMode && !isFree && isMySlot) {
+            html += '<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot(\'' + slot.date + '\', \'' + slot.time + '\', this)">✕</button>';
+          }
 
-                <!-- РЕЖИМ ПРАВКИ АДМИНА: выпадающий список участников для назначения -->
-                ${isEditMode 
-                  ? `
-                    <select class="select-member-inline" onchange="draftAssignMember(${slot.draftIndex}, this.value)">
-                      <option value="" ${isFree ? 'selected' : ''}>[Свободно]</option>
-                      ${chatProfiles.map(p => `
-                        <option value="${p.id}" ${(!isFree && (String(slot.vk_id) === p.id || slot.name === p.name)) ? 'selected' : ''}>
-                          ${p.name}
-                        </option>
-                      `).join('')}
-                    </select>
-                    <button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(${slot.draftIndex})">✕</button>
-                  ` 
-                  : ''}
+          if (isEditMode) {
+            html += '<select class="select-member-inline" onchange="draftAssignMember(' + slot.draftIndex + ', this.value)">' +
+              '<option value="" ' + (isFree ? 'selected' : '') + '>[Свободно]</option>';
 
-              </div>
-            </div>`;
+            chatProfiles.forEach(function(p) {
+              var isSelected = (!isFree && (String(slot.vk_id) === p.id || slot.name === p.name));
+              html += '<option value="' + p.id + '" ' + (isSelected ? 'selected' : '') + '>' + p.name + '</option>';
+            });
+
+            html += '</select><button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(' + slot.draftIndex + ')">✕</button>';
+          }
+
+          html += '</div></div>';
         });
 
-        html += `</div>`;
+        html += '</div>';
       }
 
       document.getElementById('content').innerHTML = html;
     }
 
-    // 4. Логика режима правки админа:
+    // 4. Режим правки:
     function toggleEditMode() {
       isEditMode = true;
       editDraft = JSON.parse(JSON.stringify(scheduleData));
@@ -504,9 +594,10 @@
     }
 
     function draftDeleteDay(date) {
-      if (!confirm("Удалить этот день со всеми слотами?")) return;
-      editDraft = editDraft.filter(s => s.date !== date);
-      renderSchedule();
+      appConfirm("Удалить этот день со всеми слотами?", function() {
+        editDraft = editDraft.filter(function(s) { return s.date !== date; });
+        renderSchedule();
+      });
     }
 
     function draftUpdateTime(index, newTime) {
@@ -515,7 +606,6 @@
       }
     }
 
-    // Ручное назначение любого участника из беседы на слот:
     function draftAssignMember(index, selectedVkId) {
       if (!editDraft[index]) return;
 
@@ -523,9 +613,15 @@
         editDraft[index].name = "";
         editDraft[index].status = "Свободно";
         editDraft[index].vk_id = "";
-        editDraft[index].forceClear = true; // Явное очищение
+        editDraft[index].forceClear = true;
       } else {
-        const found = chatProfiles.find(p => p.id === selectedVkId);
+        var found = null;
+        for (var i = 0; i < chatProfiles.length; i++) {
+          if (chatProfiles[i].id === selectedVkId) {
+            found = chatProfiles[i];
+            break;
+          }
+        }
         editDraft[index].name = found ? found.name : "Ученик";
         editDraft[index].status = "Занято";
         editDraft[index].vk_id = selectedVkId;
@@ -533,63 +629,62 @@
       }
     }
 
-    // Сохранение всех правок админа:
     function saveBatchSchedule() {
-      const btn = document.querySelector('.btn-save-batch');
+      var btn = document.querySelector('.btn-save-batch');
       btn.innerText = "⏳ Сохранение...";
       btn.disabled = true;
 
-      const logText = "⚙️ " + currentUser.name + " — Правка расписания";
-      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
-                  "&action_desc=" + encodeURIComponent(logText) + 
-                  "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
+      var logText = "⚙️ " + currentUser.name + " — Правка расписания";
+      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                "&action_desc=" + encodeURIComponent(logText) + 
+                "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
 
       fetch(url)
-        .then(res => res.json())
-        .then(res => {
+        .then(function(res) { return res.json(); })
+        .then(function(res) {
           btn.innerText = "💾 Сохранить в чат";
           btn.disabled = false;
           if (res.success) {
-            alert("✅ Изменения сохранены и отправлены в чат!");
+            appAlert("✅ Изменения сохранены и отправлены в чат!");
             cancelEditMode();
             loadSchedule();
           } else {
-            alert("❌ " + (res.error || "Ошибка"));
+            appAlert("❌ " + (res.error || "Ошибка"));
           }
         })
-        .catch(() => {
-          alert("Ошибка сети");
+        .catch(function() {
+          appAlert("Ошибка сети");
           btn.innerText = "💾 Сохранить в чат";
           btn.disabled = false;
         });
     }
 
-    // 5. Конструктор добавления слотов:
+    // 5. Конструктор:
     function addTemplateToDraft() {
-      const selected = document.getElementById('templateDate').value;
-      if (!selected) return alert("Выберите дату недели!");
+      var selected = document.getElementById('templateDate').value;
+      if (!selected) return appAlert("Выберите дату недели!");
 
-      const [y, m, d] = selected.split('-').map(Number);
-      const refDate = new Date(y, m - 1, d);
-      const dayOfWeek = refDate.getDay();
-      const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-      const monday = new Date(refDate);
+      var parts = selected.split('-').map(Number);
+      var refDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      var dayOfWeek = refDate.getDay();
+      var diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+      var monday = new Date(refDate);
       monday.setDate(refDate.getDate() + diffToMon);
 
       function getDate(offset) {
-        const t = new Date(monday);
+        var t = new Date(monday);
         t.setDate(monday.getDate() + offset);
-        const yyyy = t.getFullYear();
-        const mm = String(t.getMonth() + 1).padStart(2, '0');
-        const dd = String(t.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
+        var yyyy = t.getFullYear();
+        var mm = String(t.getMonth() + 1).padStart(2, '0');
+        var dd = String(t.getDate()).padStart(2, '0');
+        return yyyy + '-' + mm + '-' + dd;
       }
 
-      const tue = getDate(1);
-      const wed = getDate(2);
-      const fri = getDate(4);
+      var tue = getDate(1);
+      var wed = getDate(2);
+      var fri = getDate(4);
 
-      const templateSlots = [
+      var templateSlots = [
         { date: tue, dayTitle: "Вторник", time: "15:00" },
         { date: tue, dayTitle: "Вторник", time: "16:00" },
         { date: tue, dayTitle: "Вторник", time: "17:00" },
@@ -603,18 +698,20 @@
         { date: fri, dayTitle: "Пятница", time: "20:00" }
       ];
 
-      templateSlots.forEach(s => pushSlotToDraft(s.date, s.dayTitle, s.time));
+      templateSlots.forEach(function(s) {
+        pushSlotToDraft(s.date, s.dayTitle, s.time);
+      });
       renderDraftList();
     }
 
     function addSingleSlotToDraft() {
-      const date = document.getElementById('singleDate').value;
-      const time = document.getElementById('singleTime').value.trim();
-      if (!date || !time) return alert("Укажите дату и время!");
+      var date = document.getElementById('singleDate').value;
+      var time = document.getElementById('singleTime').value.trim();
+      if (!date || !time) return appAlert("Укажите дату и время!");
 
-      const [y, m, d] = date.split('-').map(Number);
-      const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-      const dayName = days[new Date(y, m - 1, d).getDay()];
+      var parts = date.split('-').map(Number);
+      var days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+      var dayName = days[new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
 
       pushSlotToDraft(date, dayName, time);
       document.getElementById('singleTime').value = '';
@@ -622,13 +719,23 @@
     }
 
     function pushSlotToDraft(date, dayTitle, time) {
-      const existingIdx = builderDraft.findIndex(s => s.date === date && s.time === time);
-      if (existingIdx !== -1) {
-        builderDraft[existingIdx] = { date, dayTitle, time };
-      } else {
-        builderDraft.push({ date, dayTitle, time });
+      var existingIdx = -1;
+      for (var i = 0; i < builderDraft.length; i++) {
+        if (builderDraft[i].date === date && builderDraft[i].time === time) {
+          existingIdx = i;
+          break;
+        }
       }
-      builderDraft.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+      if (existingIdx !== -1) {
+        builderDraft[existingIdx] = { date: date, dayTitle: dayTitle, time: time };
+      } else {
+        builderDraft.push({ date: date, dayTitle: dayTitle, time: time });
+      }
+
+      builderDraft.sort(function(a, b) {
+        return (a.date + a.time).localeCompare(b.date + b.time);
+      });
     }
 
     function renderDraftList() {
@@ -638,16 +745,14 @@
       }
       document.getElementById('draftCard').style.display = 'block';
 
-      let html = '';
-      builderDraft.forEach((s, idx) => {
-        html += `
-          <div class="preview-row">
-            <span><b>${s.dayTitle}</b> (${s.date.split('-').slice(1).reverse().join('.')})</span>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <input type="text" class="input-time-inline" value="${s.time}" onchange="builderDraft[${idx}].time = this.value">
-              <span style="color:#d32f2f; cursor:pointer; font-weight:bold; padding:2px 6px;" onclick="removeDraftSlot(${idx})">✕</span>
-            </div>
-          </div>`;
+      var html = '';
+      builderDraft.forEach(function(s, idx) {
+        html += '<div class="preview-row">' +
+          '<span><b>' + s.dayTitle + '</b> (' + s.date.split('-').slice(1).reverse().join('.') + ')</span>' +
+          '<div style="display:flex; align-items:center; gap:6px;">' +
+          '<input type="text" class="input-time-inline" value="' + s.time + '" onchange="builderDraft[' + idx + '].time = this.value">' +
+          '<span style="color:#d32f2f; cursor:pointer; font-weight:bold; padding:2px 6px;" onclick="removeDraftSlot(' + idx + ')">✕</span>' +
+          '</div></div>';
       });
       document.getElementById('draftList').innerHTML = html;
     }
@@ -665,17 +770,17 @@
     function commitDraftToSchedule() {
       if (builderDraft.length === 0) return;
 
-      const btn = document.querySelector('#draftCard .btn-primary');
+      var btn = document.querySelector('#draftCard .btn-primary');
       btn.innerText = "⏳ Сохранение...";
       btn.disabled = true;
 
-      const map = {};
-      scheduleData.forEach(s => {
+      var map = {};
+      scheduleData.forEach(function(s) {
         map[s.date + "_" + s.time] = s;
       });
 
-      builderDraft.forEach(s => {
-        const key = s.date + "_" + s.time;
+      builderDraft.forEach(function(s) {
+        var key = s.date + "_" + s.time;
         if (!map[key]) {
           map[key] = {
             date: s.date,
@@ -688,39 +793,51 @@
         }
       });
 
-      const mergedSlots = Object.values(map);
-      const logText = "📅 " + currentUser.name + " — Добавлены новые дни";
-      const url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
-                  "&action_desc=" + encodeURIComponent(logText) + 
-                  "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
+      // Собираем массив без Object.values для совместимости:
+      var mergedSlots = [];
+      for (var k in map) {
+        if (map.hasOwnProperty(k)) {
+          mergedSlots.push(map[k]);
+        }
+      }
+
+      var logText = "📅 " + currentUser.name + " — Добавлены новые дни";
+      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                "&action_desc=" + encodeURIComponent(logText) + 
+                "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
 
       fetch(url)
-        .then(res => res.json())
-        .then(res => {
+        .then(function(res) { return res.json(); })
+        .then(function(res) {
           btn.innerText = "🚀 Сохранить и добавить в расписание";
           btn.disabled = false;
           if (res.success) {
-            alert("✅ Расписание успешно обновлено!");
+            appAlert("✅ Расписание успешно обновлено!");
             clearDraft();
             switchTab('schedule');
             loadSchedule();
           } else {
-            alert("❌ " + (res.error || "Ошибка"));
+            appAlert("❌ " + (res.error || "Ошибка"));
           }
+        })
+        .catch(function() {
+          appAlert("Ошибка сети");
+          btn.innerText = "🚀 Сохранить и добавить в расписание";
+          btn.disabled = false;
         });
     }
 
     function updateDayLabel() {
-      const val = document.getElementById('singleDate').value;
+      var val = document.getElementById('singleDate').value;
       if (!val) { document.getElementById('dayOfWeekLabel').innerText = ''; return; }
-      const [y, m, d] = val.split('-').map(Number);
-      const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-      const dayName = days[new Date(y, m - 1, d).getDay()];
-      document.getElementById('dayOfWeekLabel').innerText = `День недели: ${dayName}`;
+      var parts = val.split('-').map(Number);
+      var days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+      var dayName = days[new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
+      document.getElementById('dayOfWeekLabel').innerText = 'День недели: ' + dayName;
     }
 
     function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
       if (tab === 'schedule') {
         document.querySelector('.tab-btn:first-child').classList.add('active');
         document.getElementById('tabSchedule').style.display = 'block';
@@ -734,30 +851,48 @@
 
     // 6. Обычная запись ученика:
     function bookSlot(date, time, btn) {
-      if (!confirm("Записаться на " + time + " под именем " + currentUser.name + "?")) return;
-      btn.innerText = "⏳";
-      btn.disabled = true;
+      appConfirm("Записаться на " + time + " под именем " + currentUser.name + "?", function() {
+        btn.innerText = "⏳";
+        btn.disabled = true;
 
-      fetch(API_URL + "?action=book&date=" + date + "&time=" + time + "&name=" + encodeURIComponent(currentUser.name) + "&vk_id=" + encodeURIComponent(currentUser.id))
-        .then(res => res.json())
-        .then(res => {
-          if (res.success) loadSchedule();
-          else alert(res.error || "Ошибка записи");
-        });
+        fetch(API_URL + "?action=book&date=" + date + "&time=" + time + "&name=" + encodeURIComponent(currentUser.name) + "&vk_id=" + encodeURIComponent(currentUser.id))
+          .then(function(res) { return res.json(); })
+          .then(function(res) {
+            if (res.success) {
+              loadSchedule();
+            } else {
+              appAlert(res.error || "Ошибка записи");
+              loadSchedule();
+            }
+          })
+          .catch(function() {
+            appAlert("Ошибка сети");
+            loadSchedule();
+          });
+      });
     }
 
-    // 7. Снятие СВОЕЙ брони в обычном режиме:
+    // 7. Снятие СВОЕЙ брони:
     function cancelSlot(date, time, btn) {
-      if (!confirm("Снять свою бронь на " + time + "?")) return;
-      btn.innerText = "⏳";
-      btn.disabled = true;
+      appConfirm("Снять свою бронь на " + time + "?", function() {
+        btn.innerText = "⏳";
+        btn.disabled = true;
 
-      fetch(API_URL + "?action=cancel&date=" + date + "&time=" + time + "&vk_id=" + encodeURIComponent(currentUser.id))
-        .then(res => res.json())
-        .then(res => {
-          if (res.success) loadSchedule();
-          else alert(res.error);
-        });
+        fetch(API_URL + "?action=cancel&date=" + date + "&time=" + time + "&vk_id=" + encodeURIComponent(currentUser.id))
+          .then(function(res) { return res.json(); })
+          .then(function(res) {
+            if (res.success) {
+              loadSchedule();
+            } else {
+              appAlert(res.error || "Ошибка отмены");
+              loadSchedule();
+            }
+          })
+          .catch(function() {
+            appAlert("Ошибка сети");
+            loadSchedule();
+          });
+      });
     }
   </script>
 </body>
