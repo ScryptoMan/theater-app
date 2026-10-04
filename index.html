@@ -557,21 +557,21 @@
     let isEditMode = false;
     let builderDraft = [];
 
-    // Определяем номер текущей беседы (2000000001, 2000000002 и т.д.):
+  // Определяем номер беседы бота строго как 2000000001, 2000000002 и т.д.:
     function detectPeerId() {
-      // 1. По метке в хэше кнопки (например, #peer_2000000002):
+      // 1. Проверяем хэш URL (#peer_2000000001):
       var hash = window.location.hash || "";
       var match = hash.match(/peer_(\d+)/);
-      if (match && match[1]) {
-        return match[1];
-      }
-      // 2. По системному параметру запуска ВК:
+      if (match && match[1]) return match[1];
+
+      // 2. Проверяем параметр vk_hash от кнопки:
       var urlParams = new URLSearchParams(window.location.search);
-      var chatId = urlParams.get('vk_chat_id');
-      if (chatId) {
-        return String(2000000000 + parseInt(chatId, 10));
-      }
-      return "2000000001"; // Резерв: первая беседа
+      var vkHash = urlParams.get('vk_hash') || "";
+      var match2 = vkHash.match(/peer_(\d+)/);
+      if (match2 && match2[1]) return match2[1];
+
+      // По умолчанию ВСЕГДА первая беседа бота (никаких ошибочных номеров):
+      return "2000000001";
     }
 
     const currentPeerId = detectPeerId();
@@ -640,7 +640,10 @@
               '<p style="color:#555;font-size:14px;">' + (data.error || "") + '</p></div>';
             return;
           }
-
+if (data.error && !data.schedule) {
+            appAlert("Ответ сервера: " + data.error);
+            return;
+          }
           adminList = (data.admins || []).map(String);
           chatProfiles = data.profiles || [];
           scheduleData = data.schedule || [];
