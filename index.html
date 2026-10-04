@@ -18,6 +18,7 @@
       max-width: 480px;
       margin: 0 auto;
     }
+    /* Нейтральный заголовок по умолчанию (сохраняет переносы строк) */
     .main-header {
       font-size: 18px;
       font-weight: 700;
@@ -53,6 +54,7 @@
       color: #000;
       box-shadow: 0 1px 4px rgba(0,0,0,0.1);
     }
+    /* Спойлер истории действий */
     .history-card {
       background: #fff;
       border-radius: 12px;
@@ -89,6 +91,7 @@
       color: #888;
       margin-right: 6px;
     }
+    /* Панель режима правки для администратора */
     .edit-mode-bar {
       display: none;
       background: #fff3e0;
@@ -346,6 +349,7 @@
       padding: 30px;
       color: #777;
     }
+    /* iOS-совместимое модальное окно вместо alert/confirm */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -400,11 +404,12 @@
 <body>
   <div class="container">
     
-    <!-- 1. Нейтральный стартовый заголовок при загрузке -->
+    <!-- 1. Нейтральный заголовок при первой загрузке (заменяется на серверный после ответа) -->
     <div id="mainHeaderTitle" class="main-header">🎭 Расписание занятий</div>
     
+    <!-- В режиме правки: многострочный ввод первичного сообщения -->
     <div id="headerEditBox" style="display:none; margin-bottom:12px; background:#fff; padding:12px; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-      <label style="font-size:12px; font-weight:600; color:#2c3e50; display:block; margin-bottom:4px;">Первичное сообщение (многострочное, шапка в чате):</label>
+      <label style="font-size:12px; font-weight:600; color:#2c3e50; display:block; margin-bottom:4px;">Первичное сообщение (многострочное, идет до расписания в чате):</label>
       <textarea id="headerTitleInput" class="textarea-field" rows="3" placeholder="Расписание занятий..."></textarea>
     </div>
 
@@ -416,6 +421,7 @@
     <!-- Вкладка 1: Расписание -->
     <div id="tabSchedule">
       
+      <!-- Спойлер истории действий -->
       <div class="history-card" id="historyCard" style="display:none;">
         <div class="history-header" onclick="toggleHistory()">
           <span>📜 История действий (последние 20)</span>
@@ -439,9 +445,10 @@
       <div id="content" class="loading">⏳ Загружаем расписание...</div>
     </div>
 
-    <!-- Вкладка 2: Конструктор и Настройки -->
+    <!-- Вкладка 2: Конструктор и Редактор шаблона -->
     <div id="tabAdmin" style="display:none;">
       
+      <!-- Настройки бота -->
       <div class="admin-card" style="background:#fafdff; border:1px solid #d4e3f3;">
         <h3>⚙️ Настройки бота в чате</h3>
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
@@ -450,6 +457,7 @@
         </label>
       </div>
 
+      <!-- Добавление дней -->
       <div class="admin-card">
         <h3>⚡ Добавить дни в расписание</h3>
         
@@ -472,6 +480,7 @@
         </div>
       </div>
 
+      <!-- Черновик добавляемых слотов -->
       <div class="admin-card" id="draftCard" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <h3 style="margin:0;">📝 Слоты к добавлению:</h3>
@@ -483,7 +492,7 @@
         <button class="btn-primary" style="margin-top:12px;" onclick="commitDraftToSchedule()">🚀 Сохранить и добавить в расписание</button>
       </div>
 
-      <!-- Редактор шаблона -->
+      <!-- Редактор шаблона недели -->
       <div class="admin-card" style="border:1px solid #e1e3e6;">
         <h3>📐 Редактор стандартного шаблона</h3>
         <p style="font-size:12px; color:#666; margin:0 0 10px;">Настройте дни и часы (ЧЧ:ММ), которые автоматически создаются кнопкой «+ Неделя».</p>
@@ -510,6 +519,7 @@
     </div>
   </div>
 
+  <!-- Модальное окно записи с вводом примечания к слоту -->
   <div id="bookingModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-title">Запись на занятие</div>
@@ -522,6 +532,7 @@
     </div>
   </div>
 
+  <!-- iOS-совместимое окно подтверждений/ошибок -->
   <div id="customModal" class="modal-overlay">
     <div class="modal-card">
       <div id="modalTitle" class="modal-title">Сообщение</div>
@@ -545,31 +556,36 @@
     let editDraft = [];
     let isEditMode = false;
     let builderDraft = [];
-    
-    // Динамическое определение номера беседы (2000000001, 2000000002 и т.д.):
-    let currentPeerId = extractPeerId();
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
-
-    function extractPeerId() {
-      // 1. Из хэша кнопки (#peer_2000000002):
+    // Определяем номер текущей беседы (2000000001, 2000000002 и т.д.):
+    function detectPeerId() {
+      // 1. По метке в хэше кнопки (например, #peer_2000000002):
       var hash = window.location.hash || "";
       var match = hash.match(/peer_(\d+)/);
-      if (match && match[1]) return match[1];
-
-      // 2. Из параметров запуска ВК (vk_chat_id):
+      if (match && match[1]) {
+        return match[1];
+      }
+      // 2. По системному параметру запуска ВК:
       var urlParams = new URLSearchParams(window.location.search);
-      var vkChatId = urlParams.get('vk_chat_id');
-      if (vkChatId) return String(2000000000 + parseInt(vkChatId, 10));
-
-      return "2000000001";
+      var chatId = urlParams.get('vk_chat_id');
+      if (chatId) {
+        return String(2000000000 + parseInt(chatId, 10));
+      }
+      return "2000000001"; // Резерв: первая беседа
     }
 
+    const currentPeerId = detectPeerId();
+    const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
+
+    // 0. Строгая проверка формата времени ЧЧ:ММ (от 00:00 до 23:59):
     function normalizeAndValidateTime(t) {
       if (!t) return null;
       t = t.trim().replace(/[\.\-]/g, ":");
-      if (/^\d:[0-5]\d$/.test(t)) t = "0" + t;
-      return /^([01]\d|2[0-3]):([0-5]\d)$/.test(t) ? t : null;
+      if (/^\d:[0-5]\d$/.test(t)) {
+        t = "0" + t;
+      }
+      var isValid = /^([01]\d|2[0-3]):([0-5]\d)$/.test(t);
+      return isValid ? t : null;
     }
 
     function showModal(title, text, isConfirm, onOk) {
@@ -596,7 +612,7 @@
     function appConfirm(text, onOk) { showModal("Подтверждение", text, true, onOk); }
     function appAlert(text) { showModal("Внимание", text, false); }
 
-    // 1. Авторизация:
+    // 1. Авторизация пользователя:
     vkBridge.send('VKWebAppGetUserInfo')
       .then(function(user) {
         if (user && user.id) {
@@ -611,9 +627,9 @@
         loadSchedule();
       });
 
-    // 2. Загрузка данных (передает peer_id беседы):
+    // 2. Загрузка данных конкретной беседы (передаем peer_id):
     function loadSchedule() {
-      fetch(API_URL + "?peer_id=" + encodeURIComponent(currentPeerId) + "&vk_id=" + encodeURIComponent(currentUser.id))
+      fetch(API_URL + "?vk_id=" + encodeURIComponent(currentUser.id) + "&peer_id=" + encodeURIComponent(currentPeerId))
         .then(function(res) { return res.json(); })
         .then(function(data) {
           if (data.access_denied) {
@@ -630,12 +646,14 @@
           scheduleData = data.schedule || [];
           savedTemplate = data.template || [];
 
+          // Заголовок этой конкретной беседы:
           headerTitle = data.header_title || "Расписание занятий";
           document.getElementById('mainHeaderTitle').innerText = "🎭 " + headerTitle;
           document.getElementById('headerTitleInput').value = headerTitle;
 
           renderTemplateEditor();
 
+          // Отрисовка истории действий под спойлером:
           var historyList = data.history || [];
           if (historyList.length > 0) {
             document.getElementById('historyCard').style.display = 'block';
@@ -677,7 +695,7 @@
       }
     }
 
-    // 3. Отрисовка расписания:
+    // 3. Отрисовка расписания (с заметками к каждому слоту):
     function renderSchedule() {
       var items = isEditMode ? editDraft : scheduleData;
 
@@ -730,11 +748,13 @@
               '</div>';
           }
 
+          // Редактирование и отмена своей брони:
           if (!isEditMode && !isFree && isMySlot) {
             html += '<button class="btn-edit-note" title="Изменить примечание" onclick="editMyNotePrompt(\'' + slot.date + '\', \'' + slot.time + '\', \'' + (slot.note || '') + '\')">✏️</button>';
             html += '<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot(\'' + slot.date + '\', \'' + slot.time + '\')">✕</button>';
           }
 
+          // Режим правки администратора:
           if (isEditMode) {
             html += '<select class="select-member-inline" onchange="draftAssignMember(' + slot.draftIndex + ', this.value)">' +
               '<option value="" ' + (isFree ? 'selected' : '') + '>[Свободно]</option>';
@@ -837,7 +857,9 @@
     function saveBatchSchedule() {
       for (var i = 0; i < editDraft.length; i++) {
         var t = normalizeAndValidateTime(editDraft[i].time);
-        if (!t) return appAlert("Ошибка во времени: \"" + editDraft[i].time + "\". Исправьте на формат ЧЧ:ММ!");
+        if (!t) {
+          return appAlert("Ошибка во времени: \"" + editDraft[i].time + "\". Исправьте на формат ЧЧ:ММ перед сохранением!");
+        }
         editDraft[i].time = t;
       }
 
@@ -848,8 +870,8 @@
       var newTitle = document.getElementById('headerTitleInput').value.trim() || "Расписание занятий";
       var logText = "⚙️ " + currentUser.name + " — Правка расписания";
       
-      var url = API_URL + "?action=save_batch_schedule&peer_id=" + encodeURIComponent(currentPeerId) +
-                "&vk_id=" + encodeURIComponent(currentUser.id) + 
+      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                "&peer_id=" + encodeURIComponent(currentPeerId) + 
                 "&action_desc=" + encodeURIComponent(logText) + 
                 "&header_title=" + encodeURIComponent(newTitle) +
                 "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
@@ -875,7 +897,9 @@
     }
 
     function toggleAutoDelete(isChecked) {
-      fetch(API_URL + "?action=toggle_auto_delete&peer_id=" + encodeURIComponent(currentPeerId) + "&vk_id=" + encodeURIComponent(currentUser.id) + "&value=" + isChecked)
+      fetch(API_URL + "?action=toggle_auto_delete&vk_id=" + encodeURIComponent(currentUser.id) + 
+            "&peer_id=" + encodeURIComponent(currentPeerId) + 
+            "&value=" + isChecked)
         .then(function(res) { return res.json(); })
         .then(function(data) {
           if (data.success) {
@@ -884,7 +908,7 @@
         });
     }
 
-    // 5. Редактор шаблона:
+    // 5. Редактор шаблона недели:
     function renderTemplateEditor() {
       var container = document.getElementById('templateEditorList');
       if (!savedTemplate || savedTemplate.length === 0) {
@@ -908,7 +932,7 @@
       var validTime = normalizeAndValidateTime(rawTime);
       
       if (!validTime) {
-        return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ.");
+        return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ (например, 15:00 или 09:30).");
       }
 
       savedTemplate.push({ day: day, time: validTime });
@@ -922,7 +946,9 @@
     }
 
     function saveTemplateToServer() {
-      fetch(API_URL + "?action=save_template&peer_id=" + encodeURIComponent(currentPeerId) + "&vk_id=" + encodeURIComponent(currentUser.id) + "&template=" + encodeURIComponent(JSON.stringify(savedTemplate)))
+      fetch(API_URL + "?action=save_template&vk_id=" + encodeURIComponent(currentUser.id) + 
+            "&peer_id=" + encodeURIComponent(currentPeerId) + 
+            "&template=" + encodeURIComponent(JSON.stringify(savedTemplate)))
         .then(function(res) { return res.json(); })
         .then(function(data) {
           if (data.success) {
@@ -930,6 +956,9 @@
           } else {
             appAlert("❌ " + (data.error || "Ошибка сохранения шаблона"));
           }
+        })
+        .catch(function() {
+          appAlert("Ошибка сети при сохранении шаблона");
         });
     }
 
@@ -974,7 +1003,9 @@
       if (!date) return appAlert("Укажите дату!");
       
       var validTime = normalizeAndValidateTime(rawTime);
-      if (!validTime) return appAlert("Неверный формат времени: \"" + rawTime + "\". Введите ЧЧ:ММ.");
+      if (!validTime) {
+        return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ (например, 15:30 или 09:00).");
+      }
 
       var parts = date.split('-').map(Number);
       var days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
@@ -1077,8 +1108,8 @@
       }
 
       var logText = "📅 " + currentUser.name + " — Добавлены новые дни";
-      var url = API_URL + "?action=save_batch_schedule&peer_id=" + encodeURIComponent(currentPeerId) +
-                "&vk_id=" + encodeURIComponent(currentUser.id) + 
+      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
+                "&peer_id=" + encodeURIComponent(currentPeerId) + 
                 "&action_desc=" + encodeURIComponent(logText) + 
                 "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
 
@@ -1120,7 +1151,7 @@
       }
     }
 
-    // 6. Запись:
+    // 6. Запись ученика с вводом примечания к слоту:
     var pendingBookingDate = "";
     var pendingBookingTime = "";
 
@@ -1163,11 +1194,12 @@
         });
     }
 
+    // 7. Редактирование своего примечания:
     function editMyNotePrompt(date, time, currentNote) {
       var newNote = prompt("Изменить примечание к вашему занятию на " + time + ":", currentNote);
       if (newNote === null) return;
 
-      fetch(API_URL + "?action=update_slot_note&peer_id=" + encodeURIComponent(currentPeerId) +
+      fetch(API_URL + "?action=update_slot_note&peer_id=" + encodeURIComponent(currentPeerId) + 
             "&date=" + date + "&time=" + time + 
             "&note=" + encodeURIComponent(newNote.trim()) + 
             "&vk_id=" + encodeURIComponent(currentUser.id))
@@ -1181,10 +1213,12 @@
         });
     }
 
+    // 8. Снятие своей брони:
     function cancelSlot(date, time) {
       appConfirm("Снять свою бронь на " + time + "?", function() {
-        fetch(API_URL + "?action=cancel&peer_id=" + encodeURIComponent(currentPeerId) +
-              "&date=" + date + "&time=" + time + "&vk_id=" + encodeURIComponent(currentUser.id))
+        fetch(API_URL + "?action=cancel&peer_id=" + encodeURIComponent(currentPeerId) + 
+              "&date=" + date + "&time=" + time + 
+              "&vk_id=" + encodeURIComponent(currentUser.id))
           .then(function(res) { return res.json(); })
           .then(function(res) {
             if (res.success) {
