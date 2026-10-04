@@ -13,6 +13,7 @@
       background-color: #edeef0;
       color: #000;
       -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
     }
     .container {
       max-width: 480px;
@@ -53,7 +54,6 @@
       color: #000;
       box-shadow: 0 1px 4px rgba(0,0,0,0.1);
     }
-    /* Спойлер истории */
     .history-card {
       background: #fff;
       border-radius: 12px;
@@ -76,6 +76,7 @@
       display: none;
       max-height: 180px;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       padding: 8px 14px;
       font-size: 12px;
       color: #444;
@@ -90,7 +91,6 @@
       color: #888;
       margin-right: 6px;
     }
-    /* Режим правки */
     .edit-mode-bar {
       display: none;
       background: #fff3e0;
@@ -212,7 +212,6 @@
       font-size: 12px;
       background: #fffdf9;
     }
-    /* Кнопка выбора участника в режиме правки */
     .btn-member-trigger {
       max-width: 130px;
       white-space: nowrap;
@@ -346,6 +345,7 @@
       margin-top: 10px;
       max-height: 240px;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .preview-row {
       display: flex;
@@ -360,7 +360,6 @@
       padding: 30px;
       color: #777;
     }
-    /* Стили модальных окон */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -410,7 +409,6 @@
     }
     .modal-btn-ok { background: #2787f5; color: #fff; }
     .modal-btn-cancel { background: #edeef0; color: #444; }
-    /* Строки списка в окне выбора участника */
     .picker-item {
       padding: 10px 12px;
       border-bottom: 1px solid #f2f3f5;
@@ -540,7 +538,7 @@
     </div>
   </div>
 
-  <!-- Модальное окно поиска и выбора участника беседы (с умной фильтрацией) -->
+  <!-- Окно поиска участника беседы -->
   <div id="memberPickerModal" class="modal-overlay">
     <div class="modal-card" style="max-width:350px; max-height:85vh; display:flex; flex-direction:column; padding:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -550,11 +548,11 @@
       
       <input type="text" id="memberSearchInput" class="input-field" placeholder="🔍 Введите имя или фамилию..." oninput="filterMemberPickerList()" style="margin-bottom:10px;">
 
-      <div id="memberPickerList" style="flex:1; overflow-y:auto; text-align:left; border:1px solid #e1e3e6; border-radius:10px; max-height:280px;"></div>
+      <div id="memberPickerList" style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; text-align:left; border:1px solid #e1e3e6; border-radius:10px; max-height:280px;"></div>
     </div>
   </div>
 
-  <!-- Модальное окно записи с вводом примечания -->
+  <!-- Окно записи с вводом примечания (iOS-safe) -->
   <div id="bookingModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-title">Запись на занятие</div>
@@ -563,6 +561,19 @@
       <div class="modal-actions">
         <button class="modal-btn modal-btn-cancel" onclick="closeBookingModal()">Отмена</button>
         <button id="bookingConfirmBtn" class="modal-btn modal-btn-ok">Записаться</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Окно редактирования своего примечания (iOS-safe вместо window.prompt) -->
+  <div id="editNoteModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-title">Изменить примечание</div>
+      <div id="editNoteModalText" class="modal-text"></div>
+      <input type="text" id="editNoteModalInput" class="input-field" placeholder="Примечание: роль, отрывок">
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-cancel" onclick="closeEditNoteModal()">Отмена</button>
+        <button id="editNoteConfirmBtn" class="modal-btn modal-btn-ok">Сохранить</button>
       </div>
     </div>
   </div>
@@ -582,18 +593,17 @@
   <script>
     vkBridge.send('VKWebAppInit');
 
-    let currentUser = { name: "Ученик", id: "" };
-    let adminList = [];
-    let chatProfiles = [];
-    let scheduleData = [];
-    let savedTemplate = [];
-    let headerTitle = "Расписание занятий";
-    let editDraft = [];
-    let isEditMode = false;
-    let builderDraft = [];
-    let activePickerDraftIndex = null; // Индекс слота, для которого выбираем участника
+    var currentUser = { name: "Ученик", id: "" };
+    var adminList = [];
+    var chatProfiles = [];
+    var scheduleData = [];
+    var savedTemplate = [];
+    var headerTitle = "Расписание занятий";
+    var editDraft = [];
+    var isEditMode = false;
+    var builderDraft = [];
+    var activePickerDraftIndex = null;
 
-    // Определение номера беседы:
     function detectPeerId() {
       var hash = window.location.hash || "";
       var match = hash.match(/peer_(\d+)/);
@@ -607,10 +617,10 @@
       return "2000000001";
     }
 
-    const currentPeerId = detectPeerId();
-    const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
+    var currentPeerId = detectPeerId();
+    var API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    // 0. Строгая проверка формата времени ЧЧ:ММ (от 00:00 до 23:59):
+    // Строгая проверка формата времени ЧЧ:ММ (работает на любом браузере):
     function normalizeAndValidateTime(t) {
       if (!t) return null;
       t = t.trim().replace(/[\.\-]/g, ":");
@@ -621,6 +631,7 @@
       return isValid ? t : null;
     }
 
+    // Универсальные модальные окна, заменяющие alert/confirm/prompt:
     function showModal(title, text, isConfirm, onOk) {
       var modal = document.getElementById('customModal');
       var t = document.getElementById('modalTitle');
@@ -660,7 +671,7 @@
         loadSchedule();
       });
 
-    // 2. Загрузка данных беседы:
+    // 2. Загрузка данных:
     function loadSchedule() {
       fetch(API_URL + "?vk_id=" + encodeURIComponent(currentUser.id) + "&peer_id=" + encodeURIComponent(currentPeerId))
         .then(function(res) { return res.json(); })
@@ -681,7 +692,6 @@
 
           adminList = (data.admins || []).map(String);
           
-          // Сортировка участников строго по алфавиту:
           chatProfiles = (data.profiles || []).sort(function(a, b) {
             return a.name.localeCompare(b.name, 'ru');
           });
@@ -790,11 +800,10 @@
           }
 
           if (!isEditMode && !isFree && isMySlot) {
-            html += '<button class="btn-edit-note" title="Изменить примечание" onclick="editMyNotePrompt(\'' + slot.date + '\', \'' + slot.time + '\', \'' + (slot.note || '') + '\')">✏️</button>';
+            html += '<button class="btn-edit-note" title="Изменить примечание" onclick="openEditNoteModal(\'' + slot.date + '\', \'' + slot.time + '\', \'' + (slot.note || '') + '\')">✏️</button>';
             html += '<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot(\'' + slot.date + '\', \'' + slot.time + '\')">✕</button>';
           }
 
-          // Режим правки админа с удобной кнопкой выбора участника:
           if (isEditMode) {
             var label = isFree ? '[Свободно] ▾' : '👤 ' + slot.name + ' ▾';
             html += '<button class="btn-member-trigger" onclick="openMemberPicker(' + slot.draftIndex + ')">' + label + '</button>' +
@@ -1047,6 +1056,7 @@
         });
     }
 
+    // Вставка недели по шаблону (без использования устаревшего padStart):
     function addTemplateToDraft() {
       var selected = document.getElementById('templateDate').value;
       if (!selected) return appAlert("Выберите дату недели!");
@@ -1069,8 +1079,10 @@
         var t = new Date(monday);
         t.setDate(monday.getDate() + offset);
         var yyyy = t.getFullYear();
-        var mm = String(t.getMonth() + 1).padStart(2, '0');
-        var dd = String(t.getDate()).padStart(2, '0');
+        var mNum = t.getMonth() + 1;
+        var dNum = t.getDate();
+        var mm = (mNum < 10 ? '0' : '') + mNum;
+        var dd = (dNum < 10 ? '0' : '') + dNum;
         return yyyy + '-' + mm + '-' + dd;
       }
 
@@ -1279,24 +1291,47 @@
         });
     }
 
-    function editMyNotePrompt(date, time, currentNote) {
-      var newNote = prompt("Изменить примечание к вашему занятию на " + time + ":", currentNote);
-      if (newNote === null) return;
+    // 8. Редактирование своей заметки (iOS-safe, через модальное окно вместо prompt):
+    var pendingNoteDate = "";
+    var pendingNoteTime = "";
 
+    function openEditNoteModal(date, time, currentNote) {
+      pendingNoteDate = date;
+      pendingNoteTime = time;
+      document.getElementById('editNoteModalText').innerText = "Занятие на " + time;
+      document.getElementById('editNoteModalInput').value = currentNote || "";
+      document.getElementById('editNoteModal').style.display = 'flex';
+
+      document.getElementById('editNoteConfirmBtn').onclick = function() {
+        var newNote = document.getElementById('editNoteModalInput').value.trim();
+        closeEditNoteModal();
+        saveMyNote(pendingNoteDate, pendingNoteTime, newNote);
+      };
+    }
+
+    function closeEditNoteModal() {
+      document.getElementById('editNoteModal').style.display = 'none';
+    }
+
+    function saveMyNote(date, time, newNote) {
       fetch(API_URL + "?action=update_slot_note&peer_id=" + encodeURIComponent(currentPeerId) + 
             "&date=" + date + "&time=" + time + 
-            "&note=" + encodeURIComponent(newNote.trim()) + 
+            "&note=" + encodeURIComponent(newNote) + 
             "&vk_id=" + encodeURIComponent(currentUser.id))
         .then(function(res) { return res.json(); })
         .then(function(res) {
           if (res.success) {
             loadSchedule();
           } else {
-            appAlert(res.error || "Ошибка");
+            appAlert(res.error || "Ошибка сохранения");
           }
+        })
+        .catch(function() {
+          appAlert("Ошибка сети");
         });
     }
 
+    // 9. Снятие своей брони:
     function cancelSlot(date, time) {
       appConfirm("Снять свою бронь на " + time + "?", function() {
         fetch(API_URL + "?action=cancel&peer_id=" + encodeURIComponent(currentPeerId) + 
