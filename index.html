@@ -18,11 +18,14 @@
       max-width: 480px;
       margin: 0 auto;
     }
-    h2 {
-      text-align: center;
-      font-size: 19px;
-      margin: 4px 0 12px;
+    .main-header {
+      font-size: 18px;
+      font-weight: 700;
       color: #2c3e50;
+      text-align: center;
+      margin: 4px 0 12px;
+      line-height: 1.4;
+      white-space: pre-line; /* Сохраняет переносы строк */
     }
     button {
       touch-action: manipulation;
@@ -199,6 +202,7 @@
       border-radius: 6px;
       font-weight: 600;
       font-size: 13px;
+      text-align: center;
     }
     .input-note-inline {
       width: 100px;
@@ -288,6 +292,17 @@
       border: 1px solid #dce1e6;
       border-radius: 8px;
       font-size: 14px;
+    }
+    .textarea-field {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px;
+      border: 1px solid #dce1e6;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.4;
     }
     .btn-primary {
       background: #2787f5;
@@ -388,12 +403,13 @@
 <body>
   <div class="container">
     
-    <!-- 1. Динамический заголовок / первичное сообщение -->
-    <h2 id="mainHeaderTitle">🎭 Индивидуальное мастерство</h2>
+    <!-- 1. Динамический многострочный заголовок -->
+    <div id="mainHeaderTitle" class="main-header">🎭 Индивидуальное мастерство</div>
     
+    <!-- В режиме правки: многострочный Textarea -->
     <div id="headerEditBox" style="display:none; margin-bottom:12px; background:#fff; padding:12px; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-      <label style="font-size:12px; font-weight:600; color:#2c3e50; display:block; margin-bottom:4px;">Первичное сообщение (заголовок расписания в чате):</label>
-      <input type="text" id="headerTitleInput" class="input-field" style="font-weight:600; font-size:15px;" placeholder="Индивидуальное мастерство">
+      <label style="font-size:12px; font-weight:600; color:#2c3e50; display:block; margin-bottom:4px;">Первичное сообщение (многострочное, идет до расписания):</label>
+      <textarea id="headerTitleInput" class="textarea-field" rows="3" placeholder="Индивидуальное мастерство..."></textarea>
     </div>
 
     <div id="adminTabs" class="tabs">
@@ -455,7 +471,7 @@
           <label style="font-weight:600;">2. Или добавить один день / время:</label>
           <div style="display:flex; gap:6px; margin-top:6px;">
             <input type="date" id="singleDate" class="input-field" style="flex:1.2;" onchange="updateDayLabel()">
-            <input type="text" id="singleTime" placeholder="15:30" class="input-field" style="width:70px;">
+            <input type="text" id="singleTime" placeholder="15:30" class="input-field" style="width:75px; text-align:center;">
             <button class="btn-secondary" style="width:auto; padding:0 12px;" onclick="addSingleSlotToDraft()">+ Слот</button>
           </div>
           <div style="font-size:11px; color:#224b7a; margin-top:4px;" id="dayOfWeekLabel"></div>
@@ -474,10 +490,10 @@
         <button class="btn-primary" style="margin-top:12px;" onclick="commitDraftToSchedule()">🚀 Сохранить и добавить в расписание</button>
       </div>
 
-      <!-- 2. Полноценный редактор шаблона недели -->
+      <!-- Редактор шаблона недели -->
       <div class="admin-card" style="border:1px solid #e1e3e6;">
         <h3>📐 Редактор стандартного шаблона</h3>
-        <p style="font-size:12px; color:#666; margin:0 0 10px;">Настройте дни и часы, которые автоматически создаются кнопкой «+ Неделя».</p>
+        <p style="font-size:12px; color:#666; margin:0 0 10px;">Настройте дни и часы (ЧЧ:ММ), которые автоматически создаются кнопкой «+ Неделя».</p>
         
         <div style="display:flex; gap:6px; margin-bottom:8px;">
           <select id="tplNewDay" class="input-field" style="flex:1;">
@@ -489,7 +505,7 @@
             <option>Суббота</option>
             <option>Воскресенье</option>
           </select>
-          <input type="text" id="tplNewTime" placeholder="15:00" class="input-field" style="width:75px;">
+          <input type="text" id="tplNewTime" placeholder="15:00" class="input-field" style="width:75px; text-align:center;">
           <button class="btn-secondary" style="width:auto; padding:0 12px;" onclick="addSlotToTemplateEditor()">+ Время</button>
         </div>
 
@@ -532,13 +548,29 @@
     let adminList = [];
     let chatProfiles = [];
     let scheduleData = [];
-    let savedTemplate = [];      // Шаблон из базы
+    let savedTemplate = [];
     let headerTitle = "Индивидуальное мастерство";
     let editDraft = [];
     let isEditMode = false;
     let builderDraft = [];
 
     const API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
+
+    // 0. Строгая проверка формата времени ЧЧ:ММ (от 00:00 до 23:59):
+    function normalizeAndValidateTime(t) {
+      if (!t) return null;
+      // Автоисправление точек и дефисов на двоеточие (15.00 -> 15:00):
+      t = t.trim().replace(/[\.\-]/g, ":");
+      
+      // Автоисправление однозначного часа (9:00 -> 09:00):
+      if (/^\d:[0-5]\d$/.test(t)) {
+        t = "0" + t;
+      }
+
+      // Строгая проверка ЧЧ:ММ:
+      var isValid = /^([01]\d|2[0-3]):([0-5]\d)$/.test(t);
+      return isValid ? t : null;
+    }
 
     function showModal(title, text, isConfirm, onOk) {
       var modal = document.getElementById('customModal');
@@ -562,7 +594,7 @@
     }
 
     function appConfirm(text, onOk) { showModal("Подтверждение", text, true, onOk); }
-    function appAlert(text) { showModal("Сообщение", text, false); }
+    function appAlert(text) { showModal("Внимание", text, false); }
 
     // 1. Авторизация:
     vkBridge.send('VKWebAppGetUserInfo')
@@ -598,15 +630,12 @@
           scheduleData = data.schedule || [];
           savedTemplate = data.template || [];
 
-          // Заголовок / первичное сообщение:
           headerTitle = data.header_title || "Индивидуальное мастерство";
           document.getElementById('mainHeaderTitle').innerText = "🎭 " + headerTitle;
           document.getElementById('headerTitleInput').value = headerTitle;
 
-          // Отрисовка шаблона в редакторе:
           renderTemplateEditor();
 
-          // Отрисовка спойлера истории:
           var historyList = data.history || [];
           if (historyList.length > 0) {
             document.getElementById('historyCard').style.display = 'block';
@@ -686,7 +715,7 @@
 
           html += '<div class="slot-item">' +
             (isEditMode 
-              ? '<input type="text" class="input-time-inline" value="' + slot.time + '" onchange="draftUpdateTime(' + slot.draftIndex + ', this.value)">'
+              ? '<input type="text" class="input-time-inline" value="' + slot.time + '" onchange="draftUpdateTime(' + slot.draftIndex + ', this)">'
               : '<span class="slot-time">' + slot.time + '</span>') +
             '<div class="slot-right">';
 
@@ -729,12 +758,11 @@
       document.getElementById('content').innerHTML = html;
     }
 
-    // 4. Режим правки админа (с редактированием первичного сообщения):
+    // 4. Режим правки админа:
     function toggleEditMode() {
       isEditMode = true;
       editDraft = JSON.parse(JSON.stringify(scheduleData));
       
-      // Показываем поле ввода заголовка:
       document.getElementById('mainHeaderTitle').style.display = 'none';
       document.getElementById('headerEditBox').style.display = 'block';
 
@@ -747,7 +775,6 @@
       isEditMode = false;
       editDraft = [];
 
-      // Возвращаем заголовок-текст:
       document.getElementById('mainHeaderTitle').style.display = 'block';
       document.getElementById('headerEditBox').style.display = 'none';
 
@@ -768,8 +795,16 @@
       });
     }
 
-    function draftUpdateTime(index, newTime) {
-      if (editDraft[index]) editDraft[index].time = newTime.trim();
+    // Проверка времени при изменении в строке:
+    function draftUpdateTime(index, inputElem) {
+      var valid = normalizeAndValidateTime(inputElem.value);
+      if (!valid) {
+        appAlert("Неверный формат времени: \"" + inputElem.value + "\".\nИспользуйте формат ЧЧ:ММ (например, 15:00 или 09:30).");
+        inputElem.value = editDraft[index] ? editDraft[index].time : "15:00";
+        return;
+      }
+      inputElem.value = valid;
+      if (editDraft[index]) editDraft[index].time = valid;
     }
 
     function draftUpdateSlotNote(index, newNote) {
@@ -801,6 +836,15 @@
     }
 
     function saveBatchSchedule() {
+      // Финальная проверка всех времен перед отправкой:
+      for (var i = 0; i < editDraft.length; i++) {
+        var t = normalizeAndValidateTime(editDraft[i].time);
+        if (!t) {
+          return appAlert("Ошибка во времени: \"" + editDraft[i].time + "\". Исправьте на формат ЧЧ:ММ перед сохранением!");
+        }
+        editDraft[i].time = t;
+      }
+
       var btn = document.querySelector('.btn-save-batch');
       btn.innerText = "⏳ Сохранение...";
       btn.disabled = true;
@@ -863,10 +907,14 @@
 
     function addSlotToTemplateEditor() {
       var day = document.getElementById('tplNewDay').value;
-      var time = document.getElementById('tplNewTime').value.trim();
-      if (!time) return appAlert("Введите время!");
+      var rawTime = document.getElementById('tplNewTime').value;
+      var validTime = normalizeAndValidateTime(rawTime);
+      
+      if (!validTime) {
+        return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ (например, 15:00 или 09:30).");
+      }
 
-      savedTemplate.push({ day: day, time: time });
+      savedTemplate.push({ day: day, time: validTime });
       document.getElementById('tplNewTime').value = '';
       renderTemplateEditor();
     }
@@ -891,7 +939,7 @@
         });
     }
 
-    // Вставка недели по динамическому шаблону:
+    // Вставка недели по шаблону:
     function addTemplateToDraft() {
       var selected = document.getElementById('templateDate').value;
       if (!selected) return appAlert("Выберите дату недели!");
@@ -929,14 +977,19 @@
 
     function addSingleSlotToDraft() {
       var date = document.getElementById('singleDate').value;
-      var time = document.getElementById('singleTime').value.trim();
-      if (!date || !time) return appAlert("Укажите дату и время!");
+      var rawTime = document.getElementById('singleTime').value;
+      if (!date) return appAlert("Укажите дату!");
+      
+      var validTime = normalizeAndValidateTime(rawTime);
+      if (!validTime) {
+        return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ (например, 15:30 или 09:00).");
+      }
 
       var parts = date.split('-').map(Number);
       var days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
       var dayName = days[new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
 
-      pushSlotToDraft(date, dayName, time);
+      pushSlotToDraft(date, dayName, validTime);
       document.getElementById('singleTime').value = '';
       renderDraftList();
     }
@@ -973,11 +1026,22 @@
         html += '<div class="preview-row">' +
           '<span><b>' + s.dayTitle + '</b> (' + s.date.split('-').slice(1).reverse().join('.') + ')</span>' +
           '<div style="display:flex; align-items:center; gap:6px;">' +
-          '<input type="text" class="input-time-inline" value="' + s.time + '" onchange="builderDraft[' + idx + '].time = this.value">' +
+          '<input type="text" class="input-time-inline" value="' + s.time + '" onchange="draftUpdateBuilderTime(' + idx + ', this)">' +
           '<span style="color:#d32f2f; cursor:pointer; font-weight:bold; padding:2px 6px;" onclick="removeDraftSlot(' + idx + ')">✕</span>' +
           '</div></div>';
       });
       document.getElementById('draftList').innerHTML = html;
+    }
+
+    function draftUpdateBuilderTime(idx, inputElem) {
+      var valid = normalizeAndValidateTime(inputElem.value);
+      if (!valid) {
+        appAlert("Неверный формат времени: \"" + inputElem.value + "\". Введите ЧЧ:ММ.");
+        inputElem.value = builderDraft[idx] ? builderDraft[idx].time : "15:00";
+        return;
+      }
+      inputElem.value = valid;
+      if (builderDraft[idx]) builderDraft[idx].time = valid;
     }
 
     function removeDraftSlot(idx) {
@@ -1064,7 +1128,7 @@
       }
     }
 
-    // 6. Запись ученика с вводом примечания:
+    // 6. Запись ученика:
     var pendingBookingDate = "";
     var pendingBookingTime = "";
 
