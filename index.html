@@ -538,7 +538,6 @@
     </div>
   </div>
 
-  <!-- Окно поиска участника беседы -->
   <div id="memberPickerModal" class="modal-overlay">
     <div class="modal-card" style="max-width:350px; max-height:85vh; display:flex; flex-direction:column; padding:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -552,7 +551,6 @@
     </div>
   </div>
 
-  <!-- Окно записи с вводом примечания (iOS-safe) -->
   <div id="bookingModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-title">Запись на занятие</div>
@@ -565,7 +563,6 @@
     </div>
   </div>
 
-  <!-- Окно редактирования своего примечания (iOS-safe вместо window.prompt) -->
   <div id="editNoteModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-title">Изменить примечание</div>
@@ -578,7 +575,6 @@
     </div>
   </div>
 
-  <!-- iOS-совместимое окно подтверждений/ошибок -->
   <div id="customModal" class="modal-overlay">
     <div class="modal-card">
       <div id="modalTitle" class="modal-title">Сообщение</div>
@@ -620,7 +616,46 @@
     var currentPeerId = detectPeerId();
     var API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    // Строгая проверка формата времени ЧЧ:ММ (работает на любом браузере):
+    // 📋 ОТПРАВКА КЛИЕНТСКИХ ОШИБОК В ЛИСТ "ЛОГИ" GOOGLE ТАБЛИЦЫ:
+    function sendClientErrorLog(actionName, errorDetails) {
+      try {
+        var logUrl = API_URL + "?action=log_client_error&peer_id=" + encodeURIComponent(currentPeerId) + 
+                     "&vk_id=" + encodeURIComponent(currentUser.id) + 
+                     "&user_name=" + encodeURIComponent(currentUser.name) + 
+                     "&error_details=" + encodeURIComponent("[" + actionName + "] " + errorDetails);
+        fetch(logUrl).catch(function(){});
+      } catch(e) {}
+    }
+
+    // 🚀 УНИВЕРСАЛЬНАЯ ОТПРАВКА POST-ЗАПРОСОВ (БЕЗ ОГРАНИЧЕНИЙ ПО ДЛИНЕ URL):
+    function postApiData(payload, onSuccess, onError) {
+      payload.peer_id = currentPeerId;
+      payload.vk_id = currentUser.id;
+      payload.user_name = currentUser.name;
+
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          if (onSuccess) onSuccess(data);
+        } else {
+          var errMsg = data.error || "Неизвестная ошибка сервера";
+          sendClientErrorLog(payload.action, errMsg);
+          if (onError) onError(errMsg);
+          else appAlert("❌ " + errMsg);
+        }
+      })
+      .catch(function(err) {
+        var netErr = "Сбой сети / таймаут: " + (err.message || err.toString());
+        sendClientErrorLog(payload.action, netErr);
+        if (onError) onError(netErr);
+        else appAlert("❌ " + netErr);
+      });
+    }
+
     function normalizeAndValidateTime(t) {
       if (!t) return null;
       t = t.trim().replace(/[\.\-]/g, ":");
@@ -631,7 +666,6 @@
       return isValid ? t : null;
     }
 
-    // Универсальные модальные окна, заменяющие alert/confirm/prompt:
     function showModal(title, text, isConfirm, onOk) {
       var modal = document.getElementById('customModal');
       var t = document.getElementById('modalTitle');
@@ -729,7 +763,8 @@
 
           renderSchedule();
         })
-        .catch(function() {
+        .catch(function(err) {
+          sendClientErrorLog("loadSchedule", err.message || err.toString());
           document.getElementById('content').innerHTML = '<p style="text-align:center;color:red;">Ошибка соединения с сервером</p>';
         });
     }
@@ -820,7 +855,7 @@
       document.getElementById('content').innerHTML = html;
     }
 
-    // 4. Поиск и выбор участника беседы:
+    // 4. Поиск участника беседы:
     function openMemberPicker(draftIndex) {
       activePickerDraftIndex = draftIndex;
       document.getElementById('memberSearchInput').value = '';
@@ -948,6 +983,7 @@
       }
     }
 
+    // Сохранение правок через POST (без ограничений длины):
     function saveBatchSchedule() {
       for (var i = 0; i < editDraft.length; i++) {
         var t = normalizeAndValidateTime(editDraft[i].time);
@@ -963,31 +999,23 @@
 
       var newTitle = document.getElementById('headerTitleInput').value.trim() || "Расписание занятий";
       var logText = "⚙️ " + currentUser.name + " — Правка расписания";
-      
-      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
-                "&peer_id=" + encodeURIComponent(currentPeerId) + 
-                "&action_desc=" + encodeURIComponent(logText) + 
-                "&header_title=" + encodeURIComponent(newTitle) +
-                "&slots=" + encodeURIComponent(JSON.stringify(editDraft));
 
-      fetch(url)
-        .then(function(res) { return res.json(); })
-        .then(function(res) {
-          btn.innerText = "💾 Сохранить в чат";
-          btn.disabled = false;
-          if (res.success) {
-            appAlert("✅ Изменения сохранены и отправлены в чат!");
-            cancelEditMode();
-            loadSchedule();
-          } else {
-            appAlert("❌ " + (res.error || "Ошибка"));
-          }
-        })
-        .catch(function() {
-          appAlert("Ошибка сети");
-          btn.innerText = "💾 Сохранить в чат";
-          btn.disabled = false;
-        });
+      postApiData({
+        action: "save_batch_schedule",
+        action_desc: logText,
+        header_title: newTitle,
+        slots: editDraft
+      }, function() {
+        btn.innerText = "💾 Сохранить в чат";
+        btn.disabled = false;
+        appAlert("✅ Изменения сохранены и отправлены в чат!");
+        cancelEditMode();
+        loadSchedule();
+      }, function(err) {
+        btn.innerText = "💾 Сохранить в чат";
+        btn.disabled = false;
+        appAlert("❌ Ошибка при сохранении: " + err);
+      });
     }
 
     function toggleAutoDelete(isChecked) {
@@ -999,6 +1027,9 @@
           if (data.success) {
             appAlert(isChecked ? "Включено: старое сообщение будет удаляться" : "Выключено: новые сообщения будут идти в ленту");
           }
+        })
+        .catch(function(err) {
+          sendClientErrorLog("toggleAutoDelete", err.message || err.toString());
         });
     }
 
@@ -1040,23 +1071,16 @@
     }
 
     function saveTemplateToServer() {
-      fetch(API_URL + "?action=save_template&vk_id=" + encodeURIComponent(currentUser.id) + 
-            "&peer_id=" + encodeURIComponent(currentPeerId) + 
-            "&template=" + encodeURIComponent(JSON.stringify(savedTemplate)))
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          if (data.success) {
-            appAlert("✅ Шаблон успешно сохранен в Google Таблицу!");
-          } else {
-            appAlert("❌ " + (data.error || "Ошибка сохранения шаблона"));
-          }
-        })
-        .catch(function() {
-          appAlert("Ошибка сети при сохранении шаблона");
-        });
+      postApiData({
+        action: "save_template",
+        template: savedTemplate
+      }, function() {
+        appAlert("✅ Шаблон успешно сохранен в Google Таблицу!");
+      }, function(err) {
+        appAlert("❌ Ошибка сохранения шаблона: " + err);
+      });
     }
 
-    // Вставка недели по шаблону (без использования устаревшего padStart):
     function addTemplateToDraft() {
       var selected = document.getElementById('templateDate').value;
       if (!selected) return appAlert("Выберите дату недели!");
@@ -1173,6 +1197,7 @@
       renderDraftList();
     }
 
+    // Сохранение черновика через POST с гарантированным возвратом кнопки при любой ошибке:
     function commitDraftToSchedule() {
       if (builderDraft.length === 0) return;
 
@@ -1205,25 +1230,23 @@
       }
 
       var logText = "📅 " + currentUser.name + " — Добавлены новые дни";
-      var url = API_URL + "?action=save_batch_schedule&vk_id=" + encodeURIComponent(currentUser.id) + 
-                "&peer_id=" + encodeURIComponent(currentPeerId) + 
-                "&action_desc=" + encodeURIComponent(logText) + 
-                "&slots=" + encodeURIComponent(JSON.stringify(mergedSlots));
 
-      fetch(url)
-        .then(function(res) { return res.json(); })
-        .then(function(res) {
-          btn.innerText = "🚀 Сохранить и добавить в расписание";
-          btn.disabled = false;
-          if (res.success) {
-            appAlert("✅ Расписание успешно обновлено!");
-            clearDraft();
-            switchTab('schedule');
-            loadSchedule();
-          } else {
-            appAlert("❌ " + (res.error || "Ошибка"));
-          }
-        });
+      postApiData({
+        action: "save_batch_schedule",
+        action_desc: logText,
+        slots: mergedSlots
+      }, function() {
+        btn.innerText = "🚀 Сохранить и добавить в расписание";
+        btn.disabled = false;
+        appAlert("✅ Расписание успешно обновлено!");
+        clearDraft();
+        switchTab('schedule');
+        loadSchedule();
+      }, function(err) {
+        btn.innerText = "🚀 Сохранить и добавить в расписание";
+        btn.disabled = false;
+        appAlert("❌ Не удалось добавить: " + err);
+      });
     }
 
     function updateDayLabel() {
@@ -1285,15 +1308,12 @@
             loadSchedule();
           }
         })
-        .catch(function() {
-          appAlert("Ошибка сети");
+        .catch(function(err) {
+          sendClientErrorLog("doBook", err.message || err.toString());
+          appAlert("Ошибка сети при записи");
           loadSchedule();
         });
     }
-
-    // 8. Редактирование своей заметки (iOS-safe, через модальное окно вместо prompt):
-    var pendingNoteDate = "";
-    var pendingNoteTime = "";
 
     function openEditNoteModal(date, time, currentNote) {
       pendingNoteDate = date;
@@ -1326,12 +1346,12 @@
             appAlert(res.error || "Ошибка сохранения");
           }
         })
-        .catch(function() {
+        .catch(function(err) {
+          sendClientErrorLog("saveMyNote", err.message || err.toString());
           appAlert("Ошибка сети");
         });
     }
 
-    // 9. Снятие своей брони:
     function cancelSlot(date, time) {
       appConfirm("Снять свою бронь на " + time + "?", function() {
         fetch(API_URL + "?action=cancel&peer_id=" + encodeURIComponent(currentPeerId) + 
@@ -1346,7 +1366,8 @@
               loadSchedule();
             }
           })
-          .catch(function() {
+          .catch(function(err) {
+            sendClientErrorLog("cancelSlot", err.message || err.toString());
             appAlert("Ошибка сети");
             loadSchedule();
           });
