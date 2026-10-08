@@ -189,6 +189,15 @@
       font-size: 13px;
       font-weight: 500;
     }
+    .badge-reserved {
+      background: #fff3e0;
+      color: #e65100;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid #ffe0b2;
+    }
     .slot-note-text {
       font-size: 11px;
       color: #e65100;
@@ -213,7 +222,7 @@
       background: #fffdf9;
     }
     .btn-member-trigger {
-      max-width: 130px;
+      max-width: 145px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -422,6 +431,10 @@
       background: #eef4fc;
     }
     .picker-item-free {
+      color: #4bb34b;
+      font-weight: 600;
+    }
+    .picker-item-reserved {
       color: #e65100;
       font-weight: 600;
     }
@@ -482,6 +495,14 @@
       <div class="admin-card">
         <h3>⚡ Добавить дни в расписание</h3>
         
+        <!-- Галочка создания слотов зарезервированными -->
+        <div style="margin-bottom:12px; background:#fff8e1; padding:8px 10px; border-radius:8px; border:1px solid #ffe082;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; font-weight:600; color:#b78103;">
+            <input type="checkbox" id="reserveNewSlotsToggle" style="width:18px; height:18px; accent-color:#e65100;">
+            <span>🔒 Создавать новые дни сразу зарезервированными</span>
+          </label>
+        </div>
+
         <div class="form-group" style="background:#f4f6f9; padding:10px; border-radius:10px; margin-bottom:12px;">
           <label style="font-weight:600;">1. Вставить неделю по шаблону:</label>
           <div style="display:flex; gap:8px; margin-top:6px;">
@@ -538,14 +559,15 @@
     </div>
   </div>
 
+  <!-- Модальное окно выбора участника / статуса слота -->
   <div id="memberPickerModal" class="modal-overlay">
     <div class="modal-card" style="max-width:350px; max-height:85vh; display:flex; flex-direction:column; padding:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h3 style="margin:0; font-size:16px; color:#2c3e50;">Выбор участника</h3>
+        <h3 style="margin:0; font-size:16px; color:#2c3e50;">Управление слотом</h3>
         <span style="font-size:20px; cursor:pointer; color:#888; padding:0 6px;" onclick="closeMemberPicker()">✕</span>
       </div>
       
-      <input type="text" id="memberSearchInput" class="input-field" placeholder="🔍 Введите имя или фамилию..." oninput="filterMemberPickerList()" style="margin-bottom:10px;">
+      <input type="text" id="memberSearchInput" class="input-field" placeholder="🔍 Поиск участника беседы..." oninput="filterMemberPickerList()" style="margin-bottom:10px;">
 
       <div id="memberPickerList" style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; text-align:left; border:1px solid #e1e3e6; border-radius:10px; max-height:280px;"></div>
     </div>
@@ -616,7 +638,6 @@
     var currentPeerId = detectPeerId();
     var API_URL = "https://script.google.com/macros/s/AKfycbwpKimw8EQfVQfuH4p7dYNIZM-UWQQNBDD5iUG_stdMpvTshCdJZmlC8BCn9rMnwwsNsA/exec";
 
-    // 📋 ОТПРАВКА КЛИЕНТСКИХ ОШИБОК В ЛИСТ "ЛОГИ" GOOGLE ТАБЛИЦЫ:
     function sendClientErrorLog(actionName, errorDetails) {
       try {
         var logUrl = API_URL + "?action=log_client_error&peer_id=" + encodeURIComponent(currentPeerId) + 
@@ -627,7 +648,6 @@
       } catch(e) {}
     }
 
-    // 🚀 УНИВЕРСАЛЬНАЯ ОТПРАВКА POST-ЗАПРОСОВ (БЕЗ ОГРАНИЧЕНИЙ ПО ДЛИНЕ URL):
     function postApiData(payload, onSuccess, onError) {
       payload.peer_id = currentPeerId;
       payload.vk_id = currentUser.id;
@@ -814,7 +834,9 @@
           '</div>';
 
         dayObj.slots.forEach(function(slot) {
-          var isFree = (slot.status === 'Свободно' || !slot.name);
+          var isReserved = (slot.status === 'Зарезервировано');
+          var isFree = (slot.status === 'Свободно' && !slot.name);
+          var isBooked = (!isFree && !isReserved && slot.name);
           var isMySlot = currentUser.id && (String(slot.vk_id) === currentUser.id);
 
           html += '<div class="slot-item">' +
@@ -823,24 +845,39 @@
               : '<span class="slot-time">' + slot.time + '</span>') +
             '<div class="slot-right">';
 
-          if (!isEditMode && isFree) {
-            html += '<button class="btn-free" onclick="openBookingModal(\'' + slot.date + '\', \'' + slot.time + '\')">Записаться</button>';
+          // Обычный режим (не правка):
+          if (!isEditMode) {
+            if (isFree) {
+              html += '<button class="btn-free" onclick="openBookingModal(\'' + slot.date + '\', \'' + slot.time + '\')">Записаться</button>';
+            } else if (isReserved) {
+              html += '<div class="slot-user-box">' +
+                '<span class="badge-reserved">🔒 Зарезервировано</span>' +
+                (slot.note ? '<span class="slot-note-text">📝 ' + slot.note + '</span>' : '') +
+                '</div>';
+            } else if (isBooked) {
+              html += '<div class="slot-user-box">' +
+                '<span class="badge-booked">👤 ' + slot.name + '</span>' +
+                (slot.note ? '<span class="slot-note-text">📝 ' + slot.note + '</span>' : '') +
+                '</div>';
+            }
+
+            if (isBooked && isMySlot) {
+              html += '<button class="btn-edit-note" title="Изменить примечание" onclick="openEditNoteModal(\'' + slot.date + '\', \'' + slot.time + '\', \'' + (slot.note || '') + '\')">✏️</button>';
+              html += '<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot(\'' + slot.date + '\', \'' + slot.time + '\')">✕</button>';
+            }
           }
 
-          if (!isFree) {
-            html += '<div class="slot-user-box">' +
-              '<span class="badge-booked">👤 ' + slot.name + '</span>' +
-              (slot.note ? '<span class="slot-note-text">📝 ' + slot.note + '</span>' : '') +
-              '</div>';
-          }
-
-          if (!isEditMode && !isFree && isMySlot) {
-            html += '<button class="btn-edit-note" title="Изменить примечание" onclick="openEditNoteModal(\'' + slot.date + '\', \'' + slot.time + '\', \'' + (slot.note || '') + '\')">✏️</button>';
-            html += '<button class="btn-cancel" title="Снять свою бронь" onclick="cancelSlot(\'' + slot.date + '\', \'' + slot.time + '\')">✕</button>';
-          }
-
+          // Режим правки (админ):
           if (isEditMode) {
-            var label = isFree ? '[Свободно] ▾' : '👤 ' + slot.name + ' ▾';
+            var label = '';
+            if (slot.name) {
+              label = '👤 ' + slot.name + ' ▾';
+            } else if (slot.status === 'Зарезервировано') {
+              label = '🔒 [Зарезервировано] ▾';
+            } else {
+              label = '⚪ [Свободно] ▾';
+            }
+
             html += '<button class="btn-member-trigger" onclick="openMemberPicker(' + slot.draftIndex + ')">' + label + '</button>' +
               '<input type="text" class="input-note-inline" placeholder="Примечание" value="' + (slot.note || '') + '" onchange="draftUpdateSlotNote(' + slot.draftIndex + ', this.value)">' +
               '<button class="btn-del-slot" title="Удалить слот" onclick="draftDeleteSlot(' + slot.draftIndex + ')">✕</button>';
@@ -855,7 +892,7 @@
       document.getElementById('content').innerHTML = html;
     }
 
-    // 4. Поиск участника беседы:
+    // 4. Поиск участника беседы / смена статуса слота:
     function openMemberPicker(draftIndex) {
       activePickerDraftIndex = draftIndex;
       document.getElementById('memberSearchInput').value = '';
@@ -885,7 +922,8 @@
 
     function renderMemberPickerList(list) {
       var container = document.getElementById('memberPickerList');
-      var html = '<div class="picker-item picker-item-free" onclick="selectMemberForSlot(\'\')">⚪ [Сделать свободным]</div>';
+      var html = '<div class="picker-item picker-item-free" onclick="selectMemberForSlot(\'\')">⚪ [Сделать свободным]</div>' +
+                 '<div class="picker-item picker-item-reserved" onclick="selectMemberForSlot(\'__RESERVED__\')">🔒 [Зарезервировать]</div>';
 
       if (!list || list.length === 0) {
         html += '<div style="padding:15px; color:#888; text-align:center; font-size:13px;">Никого не найдено</div>';
@@ -966,7 +1004,11 @@
         editDraft[index].name = "";
         editDraft[index].status = "Свободно";
         editDraft[index].vk_id = "";
-        editDraft[index].note = "";
+        editDraft[index].forceClear = true;
+      } else if (selectedVkId === '__RESERVED__') {
+        editDraft[index].name = "";
+        editDraft[index].status = "Зарезервировано";
+        editDraft[index].vk_id = "";
         editDraft[index].forceClear = true;
       } else {
         var found = null;
@@ -983,7 +1025,7 @@
       }
     }
 
-    // Сохранение правок через POST (без ограничений длины):
+    // Сохранение правок через POST:
     function saveBatchSchedule() {
       for (var i = 0; i < editDraft.length; i++) {
         var t = normalizeAndValidateTime(editDraft[i].time);
@@ -1086,6 +1128,9 @@
       if (!selected) return appAlert("Выберите дату недели!");
       if (!savedTemplate || savedTemplate.length === 0) return appAlert("Шаблон пуст! Настройте и сохраните шаблон в блоке ниже.");
 
+      var isReserved = document.getElementById('reserveNewSlotsToggle').checked;
+      var initialStatus = isReserved ? "Зарезервировано" : "Свободно";
+
       var parts = selected.split('-').map(Number);
       var refDate = new Date(parts[0], parts[1] - 1, parts[2]);
       var dayOfWeek = refDate.getDay();
@@ -1112,7 +1157,7 @@
 
       savedTemplate.forEach(function(item) {
         var dStr = getDateForDay(item.day);
-        pushSlotToDraft(dStr, item.day, item.time);
+        pushSlotToDraft(dStr, item.day, item.time, initialStatus);
       });
 
       renderDraftList();
@@ -1128,16 +1173,19 @@
         return appAlert("Неверный формат времени: \"" + rawTime + "\".\nВведите время в формате ЧЧ:ММ (например, 15:30 или 09:00).");
       }
 
+      var isReserved = document.getElementById('reserveNewSlotsToggle').checked;
+      var initialStatus = isReserved ? "Зарезервировано" : "Свободно";
+
       var parts = date.split('-').map(Number);
       var days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
       var dayName = days[new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
 
-      pushSlotToDraft(date, dayName, validTime);
+      pushSlotToDraft(date, dayName, validTime, initialStatus);
       document.getElementById('singleTime').value = '';
       renderDraftList();
     }
 
-    function pushSlotToDraft(date, dayTitle, time) {
+    function pushSlotToDraft(date, dayTitle, time, status) {
       var existingIdx = -1;
       for (var i = 0; i < builderDraft.length; i++) {
         if (builderDraft[i].date === date && builderDraft[i].time === time) {
@@ -1147,9 +1195,9 @@
       }
 
       if (existingIdx !== -1) {
-        builderDraft[existingIdx] = { date: date, dayTitle: dayTitle, time: time };
+        builderDraft[existingIdx] = { date: date, dayTitle: dayTitle, time: time, status: status || "Свободно" };
       } else {
-        builderDraft.push({ date: date, dayTitle: dayTitle, time: time });
+        builderDraft.push({ date: date, dayTitle: dayTitle, time: time, status: status || "Свободно" });
       }
 
       builderDraft.sort(function(a, b) {
@@ -1166,8 +1214,12 @@
 
       var html = '';
       builderDraft.forEach(function(s, idx) {
+        var statusBadge = (s.status === 'Зарезервировано')
+          ? ' <span style="font-size:11px; color:#e65100; font-weight:bold; background:#fff3e0; padding:2px 6px; border-radius:4px; border:1px solid #ffe0b2;">🔒 Резерв</span>'
+          : '';
+
         html += '<div class="preview-row">' +
-          '<span><b>' + s.dayTitle + '</b> (' + s.date.split('-').slice(1).reverse().join('.') + ')</span>' +
+          '<span><b>' + s.dayTitle + '</b> (' + s.date.split('-').slice(1).reverse().join('.') + ')' + statusBadge + '</span>' +
           '<div style="display:flex; align-items:center; gap:6px;">' +
           '<input type="text" class="input-time-inline" value="' + s.time + '" onchange="draftUpdateBuilderTime(' + idx + ', this)">' +
           '<span style="color:#d32f2f; cursor:pointer; font-weight:bold; padding:2px 6px;" onclick="removeDraftSlot(' + idx + ')">✕</span>' +
@@ -1197,7 +1249,6 @@
       renderDraftList();
     }
 
-    // Сохранение черновика через POST с гарантированным возвратом кнопки при любой ошибке:
     function commitDraftToSchedule() {
       if (builderDraft.length === 0) return;
 
@@ -1217,7 +1268,7 @@
             date: s.date,
             time: s.time,
             name: "",
-            status: "Свободно",
+            status: s.status || "Свободно",
             vk_id: "",
             note: ""
           };
