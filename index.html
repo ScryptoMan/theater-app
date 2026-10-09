@@ -727,67 +727,87 @@
 
     // 2. Загрузка данных:
     function loadSchedule() {
-      fetch(API_URL + "?vk_id=" + encodeURIComponent(currentUser.id) + "&peer_id=" + encodeURIComponent(currentPeerId))
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          if (data.access_denied) {
-            document.getElementById('content').innerHTML = 
-              '<div style="background:#fff; border-radius:14px; padding:28px 20px; text-align:center; margin-top:40px;">' +
-              '<div style="font-size:42px;margin-bottom:12px;">🔒</div>' +
-              '<h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>' +
-              '<p style="color:#555;font-size:14px;">' + (data.error || "") + '</p></div>';
-            return;
-          }
+  fetch(API_URL + "?vk_id=" + encodeURIComponent(currentUser.id) + "&peer_id=" + encodeURIComponent(currentPeerId))
+    .then(function(res) {
+      if (!res.ok) {
+        throw new Error("HTTP статус ошибки: " + res.status);
+      }
+      return res.text(); // Сначала читаем ответ как чистый текст
+    })
+    .then(function(text) {
+      var data;
+      try {
+        data = JSON.parse(text); // Пробуем распарсить JSON вручную
+      } catch (e) {
+        // Если пришел не JSON, а HTML от Google — логируем первые 150 символов ответа
+        var snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150);
+        throw new Error("Сервер вернул не JSON: " + (snippet || "пустой ответ"));
+      }
 
-          if (data.error && !data.schedule) {
-            appAlert("Ответ сервера: " + data.error);
-            return;
-          }
+      if (data.access_denied) {
+        document.getElementById('content').innerHTML = 
+          '<div style="background:#fff; border-radius:14px; padding:28px 20px; text-align:center; margin-top:40px;">' +
+          '<div style="font-size:42px;margin-bottom:12px;">🔒</div>' +
+          '<h3 style="margin:0 0 8px;color:#c62828;">Доступ ограничен</h3>' +
+          '<p style="color:#555;font-size:14px;">' + (data.error || "") + '</p></div>';
+        return;
+      }
 
-          adminList = (data.admins || []).map(String);
-          
-          chatProfiles = (data.profiles || []).sort(function(a, b) {
-            return a.name.localeCompare(b.name, 'ru');
-          });
+      if (data.error && !data.schedule) {
+        appAlert("Ответ сервера: " + data.error);
+        return;
+      }
 
-          scheduleData = data.schedule || [];
-          savedTemplate = data.template || [];
+      adminList = (data.admins || []).map(String);
+      
+      chatProfiles = (data.profiles || []).sort(function(a, b) {
+        return a.name.localeCompare(b.name, 'ru');
+      });
 
-          headerTitle = data.header_title || "Расписание занятий";
-          document.getElementById('mainHeaderTitle').innerText = "🎭 " + headerTitle;
-          document.getElementById('headerTitleInput').value = headerTitle;
+      scheduleData = data.schedule || [];
+      savedTemplate = data.template || [];
 
-          renderTemplateEditor();
+      headerTitle = data.header_title || "Расписание занятий";
+      document.getElementById('mainHeaderTitle').innerText = "🎭 " + headerTitle;
+      document.getElementById('headerTitleInput').value = headerTitle;
 
-          var historyList = data.history || [];
-          if (historyList.length > 0) {
-            document.getElementById('historyCard').style.display = 'block';
-            var hHtml = '';
-            historyList.forEach(function(h) {
-              hHtml += '<div class="history-row"><span class="history-time">' + h.time + '</span> ' + h.text + '</div>';
-            });
-            document.getElementById('historyList').innerHTML = hHtml;
-          } else {
-            document.getElementById('historyCard').style.display = 'none';
-          }
+      renderTemplateEditor();
 
-          if (typeof data.auto_delete !== 'undefined') {
-            var chk = document.getElementById('autoDeleteToggle');
-            if (chk) chk.checked = data.auto_delete;
-          }
-
-          if (adminList.indexOf(currentUser.id) !== -1) {
-            document.getElementById('adminTabs').style.display = 'flex';
-            document.getElementById('adminEditToggleBar').style.display = 'block';
-          }
-
-          renderSchedule();
-        })
-        .catch(function(err) {
-          sendClientErrorLog("loadSchedule", err.message || err.toString());
-          document.getElementById('content').innerHTML = '<p style="text-align:center;color:red;">Ошибка соединения с сервером</p>';
+      var historyList = data.history || [];
+      if (historyList.length > 0) {
+        document.getElementById('historyCard').style.display = 'block';
+        var hHtml = '';
+        historyList.forEach(function(h) {
+          hHtml += '<div class="history-row"><span class="history-time">' + h.time + '</span> ' + h.text + '</div>';
         });
-    }
+        document.getElementById('historyList').innerHTML = hHtml;
+      } else {
+        document.getElementById('historyCard').style.display = 'none';
+      }
+
+      if (typeof data.auto_delete !== 'undefined') {
+        var chk = document.getElementById('autoDeleteToggle');
+        if (chk) chk.checked = data.auto_delete;
+      }
+
+      if (adminList.indexOf(currentUser.id) !== -1) {
+        document.getElementById('adminTabs').style.display = 'flex';
+        document.getElementById('adminEditToggleBar').style.display = 'block';
+      }
+
+      renderSchedule();
+    })
+    .catch(function(err) {
+      var errText = err.message || err.toString();
+      sendClientErrorLog("loadSchedule", errText);
+      document.getElementById('content').innerHTML = 
+        '<div style="text-align:center; padding:30px 10px;">' +
+          '<p style="color:#c62828; font-weight:600; margin-bottom:8px;">Не удалось загрузить расписание</p>' +
+          '<p style="color:#777; font-size:12px; margin-bottom:14px;">Проверьте подключение к интернету</p>' +
+          '<button onclick="loadSchedule()" style="background:#2787f5; color:#fff; border:none; padding:8px 18px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer;">🔄 Повторить</button>' +
+        '</div>';
+    });
+}
 
     function toggleHistory() {
       var list = document.getElementById('historyList');
